@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Traqen
 
-## Getting Started
+A personal productivity dashboard for tracking job applications, hackathons, tasks, and notes.
 
-First, run the development server:
+## Tech stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Next.js 14** (App Router) + TypeScript strict mode
+- **Tailwind CSS** with a custom theme (off-white background, single indigo accent, restrained shadows)
+- **Framer Motion** for page transitions, staggered lists, and sheet/modal animations
+- **Supabase** (`@supabase/supabase-js` + `@supabase/ssr`) for auth and Postgres with RLS
+- **react-hook-form + zod** for forms and validation
+- **Geist Sans / Geist Mono** via next/font, **lucide-react** icons
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Getting started
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Install dependencies:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+   ```bash
+   npm install
+   ```
 
-## Learn More
+2. Create a Supabase project and run the schema in `supabase/schema.sql` once in the SQL Editor.
 
-To learn more about Next.js, take a look at the following resources:
+3. In the Supabase dashboard: **Authentication → Providers → Email → turn OFF "Confirm email"**.
+   Signups use generated `username@traqen.local` addresses, so Supabase can never deliver a
+   confirmation email — leaving this on locks every new user out.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+4. Copy the two values from **Supabase → Project Settings → API** into `.env.local`:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=your-project-url-here
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+   ```
 
-## Deploy on Vercel
+5. Run the dev server:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+   ```bash
+   npm run dev
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Auth model
+
+Username + password only (no OAuth, no email verification). Each account maps a chosen username to
+a generated Supabase auth email (`username@traqen.local`). Login resolves the username to the real
+email via the `get_email_for_username` Postgres function (SECURITY DEFINER), so the `profiles`
+table is never exposed to anonymous reads.
+
+## Structure
+
+| Route | Purpose |
+| --- | --- |
+| `/` | Hub — needs-attention strip + Applications / Tasks / Notes cards |
+| `/applications` | Jobs and hackathons — sortable table on desktop, card stack on mobile |
+| `/tasks` | Tasks grouped by status — Kanban columns / collapsible accordions |
+| `/notes` | Note tiles with inline view/edit |
+| `/login`, `/signup` | Auth pages |
+
+## Deployment
+
+Deploy to Vercel and set the same two environment variables under **Project → Settings →
+Environment Variables**.
+</content>
+</tool>
+</tool_calls>
