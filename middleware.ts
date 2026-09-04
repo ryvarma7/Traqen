@@ -5,21 +5,25 @@ const AUTH_PAGES = ["/login", "/signup"];
 
 export async function middleware(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  // Newer Supabase projects use NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  // (sb_publishable_…); older ones use NEXT_PUBLIC_SUPABASE_ANON_KEY (JWT).
+  const supabaseKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   // Without credentials we can't talk to Supabase. Return a clear message
   // instead of letting createServerClient throw and crash the middleware
   // (happens when env vars are missing or still placeholders on the host).
-  if (!url || !anonKey || url.includes("your-project-url")) {
+  if (!url || !supabaseKey || url.includes("your-project-url")) {
     return new NextResponse(
-      "Missing Supabase env vars: set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY, then redeploy.",
+      "Missing Supabase env vars: set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or _ANON_KEY), then redeploy.",
       { status: 500, headers: { "content-type": "text/plain" } }
     );
   }
 
   let response = NextResponse.next({ request });
 
-  const supabase = createServerClient(url, anonKey, {
+  const supabase = createServerClient(url, supabaseKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();

@@ -25,11 +25,13 @@ A personal productivity dashboard for tracking job applications, hackathons, tas
    Signups use generated `username@traqen.local` addresses, so Supabase can never deliver a
    confirmation email — leaving this on locks every new user out.
 
-4. Copy the two values from **Supabase → Project Settings → API** into `.env.local`:
+4. Copy the two values from **Supabase → Project Settings → API** into `.env.local`.
+   Newer projects show a **Publishable key** (`sb_publishable_…`); older ones show an
+   `anon` JWT — either works, the app reads both names:
 
    ```
    NEXT_PUBLIC_SUPABASE_URL=your-project-url-here
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
    ```
 
 5. Run the dev server:
