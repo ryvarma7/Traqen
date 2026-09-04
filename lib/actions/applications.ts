@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { HACKATHON_STATUSES, JOB_STATUSES, PRIORITIES } from "@/lib/types";
 
 type ActionResult = { error?: string };
 
@@ -12,6 +14,45 @@ const DATE_FIELDS = [
   "applied_date",
   "follow_up_date",
 ] as const;
+
+const optionalText = () =>
+  z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().max(5000).optional()
+  );
+const optionalDate = () =>
+  z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+  );
+const optionalUrl = () =>
+  z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().url().optional()
+  );
+
+const jobSchema = z.object({
+  company: z.string().trim().min(1).max(500),
+  role_type: optionalText(), stage_detail: optionalText(), location_mode: optionalText(),
+  source: optionalText(), contact_person: optionalText(), notes: optionalText(),
+  status: z.enum(JOB_STATUSES), priority: z.enum(PRIORITIES),
+  start_date: optionalDate(), end_date: optionalDate(), deadline: optionalDate(),
+  applied_date: optionalDate(), follow_up_date: optionalDate(),
+  application_link: optionalUrl(),
+});
+
+const hackathonSchema = z.object({
+  hackathon_name: z.string().trim().min(1).max(500), organizing_company: optionalText(),
+  type: optionalText(), purpose: optionalText(), theme_track: optionalText(),
+  track_details: optionalText(), mode: optionalText(), team_members: optionalText(),
+  round_detail: optionalText(), result_rank: optionalText(), notes: optionalText(),
+  status: z.enum(HACKATHON_STATUSES), priority: z.enum(PRIORITIES),
+  team_size: z.preprocess((value) => value === "" ? undefined : value,
+    z.coerce.number().int().min(1).max(50).optional()),
+  start_date: optionalDate(), end_date: optionalDate(), deadline: optionalDate(),
+  applied_date: optionalDate(), follow_up_date: optionalDate(),
+  application_link: optionalUrl(), project_link: optionalUrl(),
+});
 
 /** Empty strings from the form become nulls for Postgres. */
 function normalize(values: Record<string, unknown>): Record<string, unknown> {
@@ -38,7 +79,10 @@ export async function saveJobApplication(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
 
-  const payload = { ...normalize(values), updated_at: new Date().toISOString() };
+  const parsed = jobSchema.safeParse(values);
+  if (!parsed.success) return { error: "Please check the application fields." };
+
+  const payload = { ...normalize(parsed.data), updated_at: new Date().toISOString() };
 
   const { error } = id
     ? await supabase.from("job_applications").update(payload).eq("id", id)
@@ -69,7 +113,10 @@ export async function saveHackathon(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
 
-  const payload = { ...normalize(values), updated_at: new Date().toISOString() };
+  const parsed = hackathonSchema.safeParse(values);
+  if (!parsed.success) return { error: "Please check the hackathon fields." };
+
+  const payload = { ...normalize(parsed.data), updated_at: new Date().toISOString() };
 
   const { error } = id
     ? await supabase.from("hackathons").update(payload).eq("id", id)
@@ -105,6 +152,11 @@ export async function addDropdownOption(
   const trimmed = value.trim();
   if (!trimmed) return { error: "Enter a value." };
 
+  const allowedFields = new Set([
+    "role_type", "location_mode", "source", "type", "purpose", "theme_track", "mode",
+  ]);
+  if (!allowedFields.has(fieldName)) return { error: "Invalid dropdown field." };
+
   const { error } = await supabase.from("dropdown_options").insert({
     user_id: user.id,
     section,
@@ -112,7 +164,7 @@ export async function addDropdownOption(
     value: trimmed,
   });
   // Duplicate (user_id, section, field_name, value) is fine — treat as success.
-  if (error && !error.message.includes("duplicate")) return { error: error.message };
+  if (error && error.code !== "23505") return { error: error.message };
   revalidatePath("/applications");
   return {};
 }

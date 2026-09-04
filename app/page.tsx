@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { Briefcase, ClipboardList, StickyNote } from "lucide-react";
 import { AttentionStrip, type AttentionItem } from "@/components/hub/attention-strip";
 import { NavCards, type HubCard } from "@/components/hub/nav-cards";
 import { PageTransition } from "@/components/shell/page-transition";
@@ -79,7 +78,7 @@ export default async function HubPage() {
       description: "Jobs and hackathons you're tracking.",
       count: activeJobs + activeHackathons,
       countLabel: "active",
-      Icon: Briefcase,
+      icon: "briefcase",
     },
     {
       href: "/tasks",
@@ -87,7 +86,7 @@ export default async function HubPage() {
       description: "Everything you need to get done.",
       count: activeTasks,
       countLabel: "open",
-      Icon: ClipboardList,
+      icon: "tasks",
     },
     {
       href: "/notes",
@@ -95,7 +94,7 @@ export default async function HubPage() {
       description: "Ideas, prep, and things to remember.",
       count: notesCount,
       countLabel: notesCount === 1 ? "note" : "notes",
-      Icon: StickyNote,
+      icon: "notes",
     },
   ];
 

@@ -1,9 +1,20 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 
 type ActionResult = { error?: string };
+
+const noteSchema = z.object({
+  title: z.string().trim().min(1).max(500),
+  content: z.preprocess((value) => value === "" ? undefined : value, z.string().max(20000).optional()),
+  pinned: z.preprocess(
+    (value) => value === "true" ? true : value === "false" ? false : value,
+    z.boolean()
+  ),
+  color: z.enum(["gray", "red", "orange", "amber", "green", "blue", "violet"]),
+});
 
 export async function saveNote(
   values: Record<string, unknown>,
@@ -15,11 +26,14 @@ export async function saveNote(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
 
+  const parsed = noteSchema.safeParse(values);
+  if (!parsed.success) return { error: "Please check the note fields." };
+
   const payload = {
-    title: values.title,
-    content: values.content || null,
-    pinned: Boolean(values.pinned),
-    color: values.color || "gray",
+    title: parsed.data.title,
+    content: parsed.data.content || null,
+    pinned: parsed.data.pinned,
+    color: parsed.data.color,
     updated_at: new Date().toISOString(),
   };
 

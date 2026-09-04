@@ -1,6 +1,8 @@
+"use client";
+
 import * as React from "react";
 import { motion, type Variants } from "framer-motion";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Briefcase, ClipboardList, StickyNote } from "lucide-react";
 import Link from "next/link";
 
 const container: Variants = {
@@ -19,8 +21,10 @@ export type HubCard = {
   description: string;
   count: number;
   countLabel: string;
-  Icon: React.ComponentType<{ className?: string }>;
+  icon: "briefcase" | "tasks" | "notes";
 };
+
+const icons = { briefcase: Briefcase, tasks: ClipboardList, notes: StickyNote };
 
 export function NavCards({ cards }: { cards: HubCard[] }) {
   return (
@@ -30,8 +34,11 @@ export function NavCards({ cards }: { cards: HubCard[] }) {
       animate="visible"
       className="grid grid-cols-1 gap-4 md:grid-cols-3"
     >
-      {cards.map(({ href, title, description, count, countLabel, Icon }) => (
-        <motion.div key={href} variants={card}>
+      {cards.map(({ href, title, description, count, countLabel, icon }) => {
+        const Icon = icons[icon];
+
+        return (
+          <motion.div key={href} variants={card}>
           <motion.div
             whileHover={{
               scale: 1.02,
@@ -67,8 +74,9 @@ export function NavCards({ cards }: { cards: HubCard[] }) {
               </div>
             </Link>
           </motion.div>
-        </motion.div>
-      ))}
+          </motion.div>
+        );
+      })}
     </motion.div>
   );
 }

@@ -1,9 +1,21 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 
 type ActionResult = { error?: string };
+
+const taskSchema = z.object({
+  title: z.string().trim().min(1).max(500),
+  description: z.preprocess((value) => value === "" ? undefined : value, z.string().max(5000).optional()),
+  status: z.enum(["To do", "In progress", "Done"]),
+  priority: z.enum(["High", "Medium", "Low"]),
+  due_date: z.preprocess((value) => value === "" ? undefined : value, z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()),
+  category: z.preprocess((value) => value === "" ? undefined : value, z.string().max(200).optional()),
+  related_type: z.preprocess((value) => value === "" ? undefined : value, z.enum(["job", "hackathon"]).optional()),
+  related_id: z.preprocess((value) => value === "" ? undefined : value, z.string().uuid().optional()),
+});
 
 export async function saveTask(
   values: Record<string, unknown>,
@@ -15,15 +27,35 @@ export async function saveTask(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
 
+  const parsed = taskSchema.safeParse(values);
+  if (!parsed.success) return { error: "Please check the task fields." };
+
+  if (parsed.data.related_type !== undefined && parsed.data.related_id === undefined) {
+    return { error: "Select an application to link." };
+  }
+  if (parsed.data.related_id !== undefined && parsed.data.related_type === undefined) {
+    return { error: "Select a link type." };
+  }
+  if (parsed.data.related_id && parsed.data.related_type) {
+    const table = parsed.data.related_type === "job" ? "job_applications" : "hackathons";
+    const { data: linkedItem, error: linkError } = await supabase
+      .from(table)
+      .select("id")
+      .eq("id", parsed.data.related_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (linkError || !linkedItem) return { error: "That application could not be found." };
+  }
+
   const payload: Record<string, unknown> = {
-    title: values.title,
-    description: values.description || null,
-    status: values.status,
-    priority: values.priority,
-    due_date: values.due_date || null,
-    category: values.category || null,
-    related_type: values.related_type || null,
-    related_id: values.related_id || null,
+    title: parsed.data.title,
+    description: parsed.data.description || null,
+    status: parsed.data.status,
+    priority: parsed.data.priority,
+    due_date: parsed.data.due_date || null,
+    category: parsed.data.category || null,
+    related_type: parsed.data.related_type || null,
+    related_id: parsed.data.related_id || null,
     updated_at: new Date().toISOString(),
   };
 

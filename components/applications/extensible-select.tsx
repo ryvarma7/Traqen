@@ -79,7 +79,7 @@ export function ExtensibleSelect<T extends FieldValues>({
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        save();
+                        save(field.onChange);
                       }
                     }}
                   />
@@ -89,7 +89,7 @@ export function ExtensibleSelect<T extends FieldValues>({
                     size="md"
                     className="shrink-0"
                     disabled={saving || !draft.trim()}
-                    onClick={save}
+                    onClick={() => save(field.onChange)}
                   >
                     <Check className="h-4 w-4" />
                   </Button>
@@ -111,7 +111,7 @@ export function ExtensibleSelect<T extends FieldValues>({
     />
   );
 
-  async function save() {
+  async function save(onChange: (value: string) => void) {
     const value = draft.trim();
     if (!value) return;
     setSaving(true);
@@ -122,8 +122,9 @@ export function ExtensibleSelect<T extends FieldValues>({
       return;
     }
     toast.success("Option added");
-    setDraft("");
+    onChange(value);
     setAdding(false);
+    setDraft("");
   }
 
   function cancel() {

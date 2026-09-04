@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 
 type AuthResult = { error?: string } | undefined;
@@ -13,10 +14,14 @@ export async function signUp(
   password: string
 ): Promise<AuthResult> {
   const supabase = createClient();
-  const uname = username.trim().toLowerCase();
+  const parsedUsername = z.string().trim().min(3).max(24).regex(/^[a-z0-9_-]+$/i).safeParse(username);
+  if (!parsedUsername.success) return { error: "Choose a valid username." };
+  const parsedPassword = z.string().min(8).safeParse(password);
+  if (!parsedPassword.success) return { error: "Password must be at least 8 characters." };
+  const uname = parsedUsername.data.toLowerCase();
   const email = `${uname}@traqen.local`;
 
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  const { data, error } = await supabase.auth.signUp({ email, password: parsedPassword.data });
   if (error) return { error: error.message };
   if (!data.user) return { error: "Something went wrong creating your account." };
 
@@ -38,7 +43,12 @@ export async function logIn(
   password: string
 ): Promise<AuthResult> {
   const supabase = createClient();
-  const uname = username.trim().toLowerCase();
+  const parsedUsername = z.string().trim().min(1).max(24).safeParse(username);
+  const parsedPassword = z.string().min(1).safeParse(password);
+  if (!parsedUsername.success || !parsedPassword.success) {
+    return { error: "Invalid username or password." };
+  }
+  const uname = parsedUsername.data.toLowerCase();
 
   const { data: email, error: rpcError } = await supabase.rpc(
     "get_email_for_username",
@@ -48,7 +58,10 @@ export async function logIn(
     return { error: "Invalid username or password." };
   }
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password: parsedPassword.data,
+  });
   if (error) return { error: "Invalid username or password." };
 
   revalidatePath("/", "layout");
