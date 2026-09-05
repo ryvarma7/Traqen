@@ -18,6 +18,7 @@ import { PRIORITIES, TASK_STATUSES, type Task } from "@/lib/types";
 const schema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
+  notes: z.string().optional(),
   status: z.enum(["To do", "In progress", "Done"]),
   priority: z.string(),
   due_date: z.string().optional(),
@@ -55,6 +56,7 @@ export function TaskForm({
     defaultValues: {
       title: item?.title ?? "",
       description: item?.description ?? "",
+      notes: item?.notes ?? "",
       status: item?.status ?? "To do",
       priority: item?.priority ?? "Medium",
       due_date: item?.due_date ?? "",
@@ -106,6 +108,11 @@ export function TaskForm({
       <div className="space-y-1.5">
         <Label htmlFor="description">Description</Label>
         <Textarea id="description" rows={2} {...register("description")} />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="notes">Notes</Label>
+        <Textarea id="notes" rows={3} placeholder="Anything worth remembering…" {...register("notes")} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

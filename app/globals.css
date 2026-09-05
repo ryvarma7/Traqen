@@ -2,10 +2,194 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Paper grain — rich parchment noise over the whole scene ─────────────── */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.68' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  mix-blend-mode: multiply;
+}
+
+/* ─── Vignette depth layer ─────────────────────────────────────────────────── */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(38, 43, 26, 0.08) 100%);
+}
+
 body {
   color: theme(colors.foreground);
-  background: theme(colors.background);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  background-color: #F2F0E6;
+  background-image:
+    radial-gradient(at 12% 0%, rgba(217, 123, 10, 0.09) 0px, transparent 50%),
+    radial-gradient(at 88% 0%, rgba(107, 116, 76, 0.10) 0px, transparent 45%),
+    radial-gradient(at 50% 100%, rgba(107, 116, 76, 0.08) 0px, transparent 55%),
+    radial-gradient(at 92% 95%, rgba(217, 123, 10, 0.06) 0px, transparent 40%);
+  background-attachment: fixed;
+  font-family: var(--font-lora), Georgia, serif;
+  min-height: 100vh;
+}
+
+@layer components {
+  /* ─── Buttons ─────────────────────────────────────────────────────────────── */
+  .glass-btn-base {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    font-weight: 500;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .glass-btn-outline {
+    background: #FDFCF8;
+    border: 1px solid #C8C5A8;
+    color: #262B1A;
+    box-shadow:
+      0 1px 2px 0 rgba(38, 43, 26, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.80);
+  }
+  .glass-btn-outline:hover:not(:disabled) {
+    background: #FFFFFF;
+    border-color: #ADAA8E;
+    box-shadow:
+      0 4px 14px -3px rgba(38, 43, 26, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    transform: translateY(-0.5px);
+  }
+  .glass-btn-outline:active:not(:disabled) {
+    transform: translateY(0.5px) scale(0.98);
+    box-shadow: inset 0 1px 4px 0 rgba(38, 43, 26, 0.10);
+  }
+
+  .glass-btn-primary {
+    background: linear-gradient(135deg, #E8890C 0%, #D97B0A 100%);
+    border: 1px solid #B86508;
+    color: #FFFFFF;
+    box-shadow:
+      0 1px 2px 0 rgba(184, 101, 8, 0.45),
+      0 4px 14px -3px rgba(217, 123, 10, 0.40),
+      inset 0 1px 0 rgba(255, 220, 160, 0.25);
+  }
+  .glass-btn-primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #F0920F 0%, #E08410 100%);
+    box-shadow:
+      0 2px 4px 0 rgba(184, 101, 8, 0.45),
+      0 8px 22px -4px rgba(217, 123, 10, 0.45),
+      inset 0 1px 0 rgba(255, 220, 160, 0.30);
+    transform: translateY(-0.5px);
+  }
+  .glass-btn-primary:active:not(:disabled) {
+    transform: translateY(0.5px) scale(0.98);
+    box-shadow: inset 0 2px 5px 0 rgba(0, 0, 0, 0.28);
+  }
+
+  .glass-btn-ghost {
+    background: transparent;
+    border: 1px solid transparent;
+    color: #262B1A;
+  }
+  .glass-btn-ghost:hover:not(:disabled) {
+    background: rgba(38, 43, 26, 0.06);
+    border-color: transparent;
+  }
+
+  .glass-btn-danger {
+    background: linear-gradient(135deg, #E03131 0%, #C92A2A 100%);
+    border: 1px solid #B02525;
+    color: #FFFFFF;
+    box-shadow:
+      0 1px 2px 0 rgba(176, 37, 37, 0.4),
+      0 4px 12px -2px rgba(224, 49, 49, 0.3);
+  }
+  .glass-btn-danger:hover:not(:disabled) {
+    background: linear-gradient(135deg, #F03535 0%, #D42E2E 100%);
+    box-shadow:
+      0 2px 4px 0 rgba(176, 37, 37, 0.4),
+      0 8px 20px -4px rgba(224, 49, 49, 0.35);
+    transform: translateY(-0.5px);
+  }
+
+  /* ─── Tiles & Cards ──────────────────────────────────────────────────────── */
+  .glass-tile {
+    background: #FDFCF8;
+    border: 1px solid #C8C5A8;
+    box-shadow:
+      0 1px 3px 0 rgba(38, 43, 26, 0.07),
+      0 1px 2px 0 rgba(38, 43, 26, 0.04),
+      inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .glass-tile-hover:hover {
+    border-color: #ADAA8E;
+    box-shadow:
+      0 10px 28px -6px rgba(38, 43, 26, 0.18),
+      0 3px 8px 0 rgba(38, 43, 26, 0.07),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    transform: translateY(-1px);
+  }
+
+  /* ─── Sections & Containers ──────────────────────────────────────────────── */
+  .glass-section {
+    background: #F8F6EE;
+    border: 1px solid #C8C5A8;
+    box-shadow:
+      0 1px 3px 0 rgba(38, 43, 26, 0.05),
+      inset 0 1px 0 rgba(255, 255, 255, 0.70);
+  }
+
+  /* ─── Header ─────────────────────────────────────────────────────────────── */
+  .glass-header {
+    background: rgba(242, 240, 230, 0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid #C8C5A8;
+    box-shadow:
+      0 1px 0 0 rgba(38, 43, 26, 0.04),
+      0 4px 16px -4px rgba(38, 43, 26, 0.08);
+  }
+
+  /* ─── Sheets & Modals ───────────────────────────────────────────────────── */
+  .glass-modal {
+    background: #FDFCF8;
+    border: 1px solid #C8C5A8;
+    box-shadow:
+      0 24px 60px -12px rgba(38, 43, 26, 0.30),
+      0 10px 24px -6px rgba(38, 43, 26, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  }
+
+  /* ─── Input Fields ───────────────────────────────────────────────────────── */
+  .glass-input {
+    background: #FFFFFF;
+    border: 1px solid #C8C5A8;
+    box-shadow:
+      inset 0 1px 3px 0 rgba(38, 43, 26, 0.06),
+      inset 0 0 0 0 rgba(217, 123, 10, 0);
+    transition: all 0.15s ease;
+  }
+  .glass-input:focus {
+    background: #FFFFFF;
+    border-color: #D97B0A;
+    box-shadow:
+      0 0 0 3px rgba(217, 123, 10, 0.15),
+      inset 0 1px 3px 0 rgba(38, 43, 26, 0.04);
+    outline: none;
+  }
+
+  /* ─── Accent left-border strip (used in attention strip, notes) ─────────── */
+  .accent-strip {
+    border-left: 3px solid #D97B0A;
+  }
 }
 
 @layer utilities {

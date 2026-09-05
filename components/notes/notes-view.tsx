@@ -120,7 +120,7 @@ export function NotesView({ notes }: { notes: Note[] }) {
   return (
     <div>
       {sorted.length === 0 && !creating ? (
-        <div className="flex flex-col items-center rounded-card border border-dashed border-border bg-surface/50 px-6 py-14 text-center">
+        <div className="flex flex-col items-center rounded-card glass-section border-dashed px-6 py-14 text-center">
           <p className="text-sm text-muted-foreground">
             No notes yet. Write your first one.
           </p>
@@ -128,7 +128,7 @@ export function NotesView({ notes }: { notes: Note[] }) {
             whileTap={{ scale: 0.97 }}
             type="button"
             onClick={openNew}
-            className="mt-4 inline-flex h-11 items-center gap-2 rounded-field bg-accent px-4 text-sm font-medium text-accent-foreground"
+            className="mt-4 glass-btn-base glass-btn-primary h-10 gap-2 rounded-field px-4 text-sm"
           >
             <Plus className="h-4 w-4" /> Add note
           </motion.button>
@@ -138,7 +138,7 @@ export function NotesView({ notes }: { notes: Note[] }) {
           variants={listVariants}
           initial="hidden"
           animate="visible"
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          className="columns-1 gap-3.5 sm:columns-2 lg:columns-3"
         >
           {sorted.map((note) => (
             <motion.button
@@ -147,17 +147,17 @@ export function NotesView({ notes }: { notes: Note[] }) {
               whileTap={{ scale: 0.98 }}
               type="button"
               onClick={() => openNote(note)}
-              className="flex min-h-32 flex-col rounded-card border border-border bg-surface p-4 text-left"
+              className="mb-3.5 flex min-h-32 w-full break-inside-avoid flex-col rounded-card glass-tile glass-tile-hover p-4 text-left"
             >
               <div className="flex items-center gap-2">
                 {note.color !== "gray" && <ColorDot color={note.color} />}
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                   {note.title}
                 </span>
-                {note.pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
+                {note.pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
               </div>
               {note.content && (
-                <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">
+                <p className="mt-1.5 whitespace-pre-wrap text-xs text-muted-foreground">
                   {note.content}
                 </p>
               )}
@@ -169,13 +169,14 @@ export function NotesView({ notes }: { notes: Note[] }) {
         </motion.div>
       )}
 
-      {/* Floating add button */}
+      {/* Floating add button with glowing Framer glass aesthetic */}
       <motion.button
-        whileTap={{ scale: 0.97 }}
+        whileTap={{ scale: 0.95 }}
+        whileHover={{ scale: 1.05 }}
         type="button"
         aria-label="Add note"
         onClick={openNew}
-        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-lift"
+        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full glass-btn-base glass-btn-primary shadow-lg"
       >
         <Plus className="h-6 w-6" />
       </motion.button>
@@ -189,7 +190,7 @@ export function NotesView({ notes }: { notes: Note[] }) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="absolute inset-0 bg-foreground/25"
+              className="absolute inset-0 bg-foreground/30"
               onClick={close}
             />
             <motion.div
@@ -202,13 +203,13 @@ export function NotesView({ notes }: { notes: Note[] }) {
                   : { duration: 0.18, ease: "easeOut" }
               }
               className={cn(
-                "absolute flex flex-col bg-surface",
+                "absolute flex flex-col glass-modal overflow-hidden",
                 isMobile
                   ? "inset-0 rounded-t-card"
-                  : "left-1/2 top-1/2 max-h-[85vh] w-full max-w-xl -translate-x-1/2 -translate-y-1/2 rounded-card shadow-modal"
+                  : "left-1/2 top-1/2 max-h-[85vh] w-full max-w-xl -translate-x-1/2 -translate-y-1/2 rounded-card"
               )}
             >
-              <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-3.5">
+              <div className="flex shrink-0 items-center justify-between border-b border-border bg-muted/60 px-5 py-3.5">
                 {editing || creating ? (
                   <Input
                     value={title}
@@ -230,7 +231,7 @@ export function NotesView({ notes }: { notes: Note[] }) {
                   type="button"
                   onClick={close}
                   aria-label="Close"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-field text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="glass-btn-base glass-btn-ghost flex h-8 w-8 shrink-0 items-center justify-center rounded-field text-muted-foreground hover:text-foreground"
                 >
                   <X className="h-4 w-4" />
                 </motion.button>
@@ -244,7 +245,7 @@ export function NotesView({ notes }: { notes: Note[] }) {
                       onChange={(e) => setContent(e.target.value)}
                       rows={10}
                       placeholder="Start writing…"
-                      className="resize-none"
+                      className="resize-none glass-input"
                     />
                     <div className="flex items-center gap-2">
                       <Label className="mr-1">Color</Label>
@@ -255,19 +256,19 @@ export function NotesView({ notes }: { notes: Note[] }) {
                           aria-label={`Color ${c}`}
                           onClick={() => setColor(c)}
                           className={cn(
-                            "flex h-7 w-7 items-center justify-center rounded-full",
-                            color === c && "ring-2 ring-accent ring-offset-1"
+                            "flex h-7 w-7 items-center justify-center rounded-full transition-transform hover:scale-110",
+                            color === c && "ring-2 ring-accent ring-offset-2"
                           )}
                         >
                           <ColorDot color={c} className="h-3.5 w-3.5" />
                         </button>
                       ))}
-                      <label className="ml-auto flex min-h-11 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      <label className="ml-auto flex min-h-11 items-center gap-1.5 text-xs font-medium text-muted-foreground cursor-pointer">
                         <input
                           type="checkbox"
                           checked={pinned}
                           onChange={(e) => setPinned(e.target.checked)}
-                          className="h-4 w-4 accent-accent"
+                          className="h-4 w-4 accent-accent rounded"
                         />
                         Pin
                       </label>
@@ -289,7 +290,7 @@ export function NotesView({ notes }: { notes: Note[] }) {
                 )}
               </div>
 
-              <div className="flex shrink-0 items-center gap-2 border-t border-border px-5 py-3.5">
+              <div className="flex shrink-0 items-center gap-2 border-t border-border bg-muted/60 px-5 py-3.5">
                 {editing || creating ? (
                   <>
                     <Button size="lg" className="flex-1" disabled={busy} onClick={save}>

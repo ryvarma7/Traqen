@@ -127,6 +127,7 @@ create table public.tasks (
   user_id uuid references auth.users(id) on delete cascade not null,
   title text not null,
   description text,
+  notes text,
   status text default 'To do' check (status in ('To do','In progress','Done')),
   priority text default 'Medium',
   due_date date,
@@ -160,3 +161,10 @@ create policy "Users manage own notes"
   on public.notes for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------------
+-- Migration for existing databases: add notes to tasks.
+-- If your tasks table already exists, run just this statement once in
+-- Supabase → SQL Editor (the full create table above already includes it).
+-- ---------------------------------------------------------------------------
+alter table public.tasks add column if not exists notes text;

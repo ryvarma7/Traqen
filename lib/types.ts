@@ -54,6 +54,7 @@ export type Task = {
   user_id: string;
   title: string;
   description: string | null;
+  notes: string | null;
   status: "To do" | "In progress" | "Done";
   priority: string;
   due_date: string | null;

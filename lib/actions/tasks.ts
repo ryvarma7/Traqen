@@ -9,6 +9,7 @@ type ActionResult = { error?: string };
 const taskSchema = z.object({
   title: z.string().trim().min(1).max(500),
   description: z.preprocess((value) => value === "" ? undefined : value, z.string().max(5000).optional()),
+  notes: z.preprocess((value) => value === "" ? undefined : value, z.string().max(5000).optional()),
   status: z.enum(["To do", "In progress", "Done"]),
   priority: z.enum(["High", "Medium", "Low"]),
   due_date: z.preprocess((value) => value === "" ? undefined : value, z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()),
@@ -50,6 +51,7 @@ export async function saveTask(
   const payload: Record<string, unknown> = {
     title: parsed.data.title,
     description: parsed.data.description || null,
+    notes: parsed.data.notes || null,
     status: parsed.data.status,
     priority: parsed.data.priority,
     due_date: parsed.data.due_date || null,
@@ -86,6 +88,30 @@ export async function setTaskStatus(
   const { error } = await supabase
     .from("tasks")
     .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/");
+  revalidatePath("/tasks");
+  return {};
+}
+
+/** Notes-only save — the full saveTask schema requires title/status/priority. */
+export async function saveTaskNotes(
+  id: string,
+  notes: string
+): Promise<ActionResult> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const parsed = z.string().max(5000).safeParse(notes);
+  if (!parsed.success) return { error: "Notes are too long." };
+
+  const { error } = await supabase
+    .from("tasks")
+    .update({ notes: notes.trim() || null, updated_at: new Date().toISOString() })
     .eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/");

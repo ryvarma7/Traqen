@@ -137,6 +137,54 @@ export async function deleteHackathon(id: string): Promise<ActionResult> {
   return {};
 }
 
+/** Notes-only saves — the full schemas require company/hackathon_name, so a
+ *  quick-edit from the expanded row needs its own lightweight action. */
+export async function saveJobApplicationNotes(
+  id: string,
+  notes: string
+): Promise<ActionResult> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const parsed = z.string().max(5000).safeParse(notes);
+  if (!parsed.success) return { error: "Notes are too long." };
+
+  const { error } = await supabase
+    .from("job_applications")
+    .update({ notes: notes.trim() || null, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/");
+  revalidatePath("/applications");
+  return {};
+}
+
+export async function saveHackathonNotes(
+  id: string,
+  notes: string
+): Promise<ActionResult> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const parsed = z.string().max(5000).safeParse(notes);
+  if (!parsed.success) return { error: "Notes are too long." };
+
+  const { error } = await supabase
+    .from("hackathons")
+    .update({ notes: notes.trim() || null, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/");
+  revalidatePath("/applications");
+  return {};
+}
+
 /** "+ Add new" — persist a custom dropdown value scoped to user/section/field. */
 export async function addDropdownOption(
   section: "jobs" | "hackathons",

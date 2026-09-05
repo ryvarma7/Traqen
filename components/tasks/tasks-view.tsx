@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { ChevronDown, Link2, Pencil, Plus } from "lucide-react";
+import { ChevronDown, Link2, Pencil, Plus, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { FormSheet } from "@/components/shared/form-sheet";
 import { CountdownPill } from "@/components/shared/countdown-pill";
@@ -56,7 +56,7 @@ export function TasksView({
   return (
     <div>
       {empty ? (
-        <div className="flex flex-col items-center rounded-card border border-dashed border-border bg-surface/50 px-6 py-14 text-center">
+        <div className="flex flex-col items-center rounded-card glass-section border-dashed px-6 py-14 text-center">
           <p className="text-sm text-muted-foreground">
             No tasks yet. Add your first one.
           </p>
@@ -64,7 +64,7 @@ export function TasksView({
             whileTap={{ scale: 0.97 }}
             type="button"
             onClick={() => setSheet({ open: true, editing: null, preset: "To do" })}
-            className="mt-4 inline-flex h-11 items-center gap-2 rounded-field bg-accent px-4 text-sm font-medium text-accent-foreground"
+            className="mt-4 glass-btn-base glass-btn-primary h-10 gap-2 rounded-field px-4 text-sm"
           >
             <Plus className="h-4 w-4" /> Add task
           </motion.button>
@@ -76,32 +76,36 @@ export function TasksView({
             {TASK_STATUSES.map((status) => {
               const group = tasks.filter((t) => t.status === status);
               return (
-                <section key={status}>
-                  <h2 className="mb-2 flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {status}
-                    <span className="font-mono tabular-nums">{group.length}</span>
-                  </h2>
+                <section key={status} className="flex flex-col">
+                  <div className="mb-2 flex items-center justify-between px-1">
+                    <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      {status}
+                    </h2>
+                    <span className="flex h-5 items-center rounded-full border border-border bg-surface px-2 font-mono text-2xs font-semibold tabular-nums text-foreground/80">
+                      {group.length}
+                    </span>
+                  </div>
                   <motion.div
                     variants={listVariants}
                     initial="hidden"
                     animate="visible"
-                    className="space-y-2"
+                    className="space-y-2.5"
                   >
                     {group.map((task) => (
                       <motion.div
                         key={task.id}
                         variants={itemVariants}
-                        className="rounded-card border border-border bg-surface p-3"
+                        className="rounded-card glass-tile glass-tile-hover p-3.5"
                       >
                         <TaskCardBody task={task} linked={linkLabel(task)} onEdit={() => setSheet({ open: true, editing: task.id, preset: task.status })} />
-                        <div className="mt-2.5 flex flex-wrap gap-1.5">
+                        <div className="mt-3 flex flex-wrap gap-1.5">
                           {TASK_STATUSES.filter((s) => s !== status).map((s) => (
                             <motion.button
                               key={s}
                               whileTap={{ scale: 0.97 }}
                               type="button"
                               onClick={() => moveTask(task, s)}
-                              className="rounded-full border border-border px-2.5 py-1 text-2xs font-medium text-muted-foreground hover:border-accent/40 hover:text-foreground"
+                              className="glass-btn-base glass-btn-outline rounded-full px-2.5 py-0.5 text-2xs font-medium text-muted-foreground hover:text-foreground"
                             >
                               → {s}
                             </motion.button>
@@ -110,7 +114,7 @@ export function TasksView({
                       </motion.div>
                     ))}
                     {group.length === 0 && (
-                      <div className="rounded-card border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
+                      <div className="rounded-card glass-section border-dashed px-3 py-8 text-center text-xs text-muted-foreground">
                         Nothing here
                       </div>
                     )}
@@ -126,7 +130,7 @@ export function TasksView({
               const group = tasks.filter((t) => t.status === status);
               const isOpen = openSection === status;
               return (
-                <section key={status} className="rounded-card border border-border bg-surface">
+                <section key={status} className="rounded-card glass-section overflow-hidden">
                   <button
                     type="button"
                     className="flex min-h-11 w-full items-center justify-between px-4 py-3"
@@ -134,7 +138,7 @@ export function TasksView({
                   >
                     <span className="flex items-center gap-2 text-sm font-medium text-foreground">
                       {status}
-                      <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                      <span className="flex h-5 items-center rounded-full border border-border bg-surface px-2 font-mono text-2xs font-semibold tabular-nums text-foreground/80">
                         {group.length}
                       </span>
                     </span>
@@ -154,22 +158,22 @@ export function TasksView({
                         transition={{ duration: 0.2 }}
                         className="overflow-hidden"
                       >
-                        <div className="space-y-2 border-t border-border p-3">
+                        <div className="space-y-2.5 border-t border-border p-3">
                           {group.map((task) => (
-                            <div key={task.id} className="rounded-field border border-border p-3">
+                            <div key={task.id} className="rounded-field glass-tile p-3">
                               <TaskCardBody
                                 task={task}
                                 linked={linkLabel(task)}
                                 onEdit={() => setSheet({ open: true, editing: task.id, preset: task.status })}
                               />
-                              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                              <div className="mt-3 flex flex-wrap gap-1.5">
                                 {TASK_STATUSES.filter((s) => s !== status).map((s) => (
                                   <motion.button
                                     key={s}
                                     whileTap={{ scale: 0.97 }}
                                     type="button"
                                     onClick={() => moveTask(task, s)}
-                                    className="h-9 rounded-full border border-border px-3 text-2xs font-medium text-muted-foreground"
+                                    className="glass-btn-base glass-btn-outline h-8 rounded-full px-3 text-2xs font-medium text-muted-foreground"
                                   >
                                     → {s}
                                   </motion.button>
@@ -193,13 +197,14 @@ export function TasksView({
         </>
       )}
 
-      {/* Floating add button */}
+      {/* Floating add button with glowing Framer glass aesthetic */}
       <motion.button
-        whileTap={{ scale: 0.97 }}
+        whileTap={{ scale: 0.95 }}
+        whileHover={{ scale: 1.05 }}
         type="button"
         aria-label="Add task"
         onClick={() => setSheet({ open: true, editing: null, preset: "To do" })}
-        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-lift"
+        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full glass-btn-base glass-btn-primary shadow-lg"
       >
         <Plus className="h-6 w-6" />
       </motion.button>
@@ -238,7 +243,7 @@ function TaskCardBody({
           type="button"
           aria-label="Edit task"
           onClick={onEdit}
-          className="shrink-0 rounded-field p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="shrink-0 rounded-field p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <Pencil className="h-3.5 w-3.5" />
         </button>
@@ -248,7 +253,13 @@ function TaskCardBody({
           {task.description}
         </p>
       )}
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      {task.notes && (
+        <p className="mt-1.5 flex items-start gap-1.5 border-l-2 border-accent/40 pl-2 text-xs text-muted-foreground">
+          <StickyNote className="mt-0.5 h-3 w-3 shrink-0" />
+          <span className="line-clamp-2">{task.notes}</span>
+        </p>
+      )}
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
         <PriorityPill priority={task.priority} />
         {task.due_date && <CountdownPill date={task.due_date} />}
         {linked && (
@@ -258,7 +269,7 @@ function TaskCardBody({
           </span>
         )}
         {task.category && (
-          <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-2xs font-medium text-muted-foreground">
+          <span className="rounded-full border border-border bg-surface px-2 py-0.5 text-2xs font-medium text-muted-foreground">
             {task.category}
           </span>
         )}

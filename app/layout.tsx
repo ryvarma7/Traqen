@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { Toaster } from "sonner";
+import { Lora } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
+const lora = Lora({
+  subsets: ["latin"],
+  variable: "--font-lora",
+  style: ["normal", "italic"],
 });
 const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
@@ -27,7 +28,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} bg-background text-foreground antialiased`}
+        className={`${lora.variable} ${geistMono.variable} bg-background text-foreground antialiased`}
       >
         {children}
         <Toaster position="top-right" toastOptions={{

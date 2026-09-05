@@ -8,7 +8,7 @@ import { useIsMobile } from "@/lib/hooks";
 const spring = { type: "spring", stiffness: 380, damping: 34 } as const;
 
 /** Bottom sheet on mobile (spring slide-up), centered modal on desktop
- *  (scale + fade) — per spec. */
+ *  (scale + fade) with Framer glass styling. */
 export function FormSheet({
   open,
   onClose,
@@ -42,7 +42,7 @@ export function FormSheet({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="absolute inset-0 bg-foreground/25"
+            className="absolute inset-0 bg-foreground/20 backdrop-blur-sm"
             onClick={onClose}
           />
 
@@ -53,10 +53,10 @@ export function FormSheet({
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={spring}
-              className="absolute inset-x-0 bottom-0 flex max-h-[92dvh] flex-col rounded-t-card bg-surface shadow-sheet"
+              className="absolute inset-x-0 bottom-0 flex max-h-[92dvh] flex-col rounded-t-card glass-modal overflow-hidden"
             >
               <SheetHeader title={title} onClose={onClose} />
-              <div className="overflow-y-auto px-5 pb-8 pt-1">{children}</div>
+              <div className="overflow-y-auto px-5 pb-8 pt-4">{children}</div>
             </motion.div>
           ) : (
             <div className="absolute inset-0 flex items-center justify-center p-6">
@@ -66,10 +66,10 @@ export function FormSheet({
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.96 }}
                 transition={{ duration: 0.18, ease: "easeOut" }}
-                className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-card bg-surface shadow-modal"
+                className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-card glass-modal overflow-hidden"
               >
                 <SheetHeader title={title} onClose={onClose} />
-                <div className="overflow-y-auto px-6 pb-6 pt-1">{children}</div>
+                <div className="overflow-y-auto px-6 pb-6 pt-4">{children}</div>
               </motion.div>
             </div>
           )}
@@ -87,7 +87,7 @@ function SheetHeader({
   onClose: () => void;
 }) {
   return (
-    <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-3.5 md:px-6">
+    <div className="flex shrink-0 items-center justify-between border-b border-white/60 bg-white/40 px-5 py-3.5 backdrop-blur-md md:px-6">
       <h2 className="text-base font-semibold tracking-tight text-foreground">
         {title}
       </h2>
@@ -96,7 +96,7 @@ function SheetHeader({
         type="button"
         onClick={onClose}
         aria-label="Close"
-        className="flex h-9 w-9 items-center justify-center rounded-field text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="glass-btn-base glass-btn-ghost flex h-8 w-8 items-center justify-center rounded-field text-muted-foreground hover:text-foreground"
       >
         <X className="h-4 w-4" />
       </motion.button>
