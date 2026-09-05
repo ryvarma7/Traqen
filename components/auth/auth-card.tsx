@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Briefcase, StickyNote, Trophy } from "lucide-react";
 
 const FEATURES = [
@@ -57,30 +58,24 @@ export function AuthCard({
               }}
             />
 
-            {/* Decorative giant letter */}
+            {/* Decorative watermark logo */}
             <div
               aria-hidden
-              className="pointer-events-none absolute -bottom-8 right-4 select-none font-bold leading-none text-white/[0.03]"
-              style={{ fontSize: "18rem", fontStyle: "italic" }}
+              className="pointer-events-none absolute -bottom-6 -right-6 select-none opacity-[0.04]"
             >
-              T
+              <Image src="/logo.png" alt="" width={280} height={280} className="invert" />
             </div>
 
             {/* Logo */}
-            <div className="relative flex items-center gap-2.5">
-              <span
-                className="flex h-9 w-9 items-center justify-center rounded-[10px] text-sm font-bold text-white"
-                style={{
-                  background: "rgba(217, 123, 10, 0.25)",
-                  border: "1px solid rgba(217, 123, 10, 0.40)",
-                  boxShadow: "inset 0 1px 0 rgba(255,210,140,0.20)",
-                }}
-              >
-                T
-              </span>
-              <span className="text-lg font-semibold tracking-tight text-white/90">
-                Traqen
-              </span>
+            <div className="relative">
+              <Image
+                src="/logo.png"
+                alt="Traqen"
+                width={140}
+                height={52}
+                className="h-12 w-auto object-contain brightness-0 invert"
+                priority
+              />
             </div>
 
             {/* Tagline + features */}
@@ -142,20 +137,15 @@ export function AuthCard({
             }}
           >
             {/* Mobile logo */}
-            <div className="mb-7 flex items-center gap-2.5 md:hidden">
-              <span
-                className="flex h-8 w-8 items-center justify-center rounded-[9px] text-sm font-bold"
-                style={{
-                  background: "linear-gradient(135deg, #F5E4C0 0%, #FDF0DC 100%)",
-                  border: "1px solid #D97B0A",
-                  color: "#D97B0A",
-                }}
-              >
-                T
-              </span>
-              <span className="text-lg font-semibold tracking-tight text-foreground">
-                Traqen
-              </span>
+            <div className="mb-7 md:hidden">
+              <Image
+                src="/logo.png"
+                alt="Traqen"
+                width={120}
+                height={44}
+                className="h-10 w-auto object-contain"
+                priority
+              />
             </div>
 
             {/* Title block */}
