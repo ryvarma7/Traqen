@@ -85,13 +85,13 @@ export default function SignupPage() {
         noValidate
       >
         <div className="space-y-1.5">
-          <Label htmlFor="username">Username</Label>
+          <Label htmlFor="username" className="text-white/70">Username</Label>
           <div className="relative">
             <Input
               id="username"
               autoComplete="username"
               placeholder="yourname"
-              className="pr-9"
+              className="auth-input pr-9 text-white placeholder:text-white/30"
               {...register("username")}
             />
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
@@ -103,7 +103,7 @@ export default function SignupPage() {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                   >
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    <Loader2 className="h-4 w-4 animate-spin text-white/40" />
                   </motion.span>
                 )}
                 {availability === "available" && (
@@ -139,12 +139,13 @@ export default function SignupPage() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="password">Password</Label>
+          <Label htmlFor="password" className="text-white/70">Password</Label>
           <Input
             id="password"
             type="password"
             autoComplete="new-password"
             placeholder="At least 8 characters"
+            className="auth-input text-white placeholder:text-white/30"
             {...register("password")}
           />
           {errors.password && (
@@ -153,12 +154,13 @@ export default function SignupPage() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="confirm">Confirm password</Label>
+          <Label htmlFor="confirm" className="text-white/70">Confirm password</Label>
           <Input
             id="confirm"
             type="password"
             autoComplete="new-password"
             placeholder="Repeat your password"
+            className="auth-input text-white placeholder:text-white/30"
             {...register("confirm")}
           />
           {errors.confirm && (
@@ -171,7 +173,7 @@ export default function SignupPage() {
         <Button
           type="submit"
           size="lg"
-          className="w-full"
+          className="auth-btn-primary w-full focus-visible:ring-white/30"
           disabled={isSubmitting || availability === "taken"}
         >
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -179,9 +181,9 @@ export default function SignupPage() {
         </Button>
       </motion.form>
 
-      <p className="mt-6 text-center text-xs text-muted-foreground">
+      <p className="mt-6 text-center text-xs text-white/50">
         Already have an account?{" "}
-        <Link href="/login" className="font-medium text-accent hover:underline">
+        <Link href="/login" className="font-medium text-white underline-offset-4 hover:underline">
           Log in
         </Link>
       </p>

@@ -46,11 +46,12 @@ export default function LoginPage() {
         noValidate
       >
         <div className="space-y-1.5">
-          <Label htmlFor="username">Username</Label>
+          <Label htmlFor="username" className="text-white/70">Username</Label>
           <Input
             id="username"
             autoComplete="username"
             placeholder="yourname"
+            className="auth-input text-white placeholder:text-white/30"
             {...register("username")}
           />
           {errors.username && (
@@ -59,12 +60,13 @@ export default function LoginPage() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="password">Password</Label>
+          <Label htmlFor="password" className="text-white/70">Password</Label>
           <Input
             id="password"
             type="password"
             autoComplete="current-password"
             placeholder="••••••••"
+            className="auth-input text-white placeholder:text-white/30"
             {...register("password")}
           />
           {errors.password && (
@@ -77,7 +79,7 @@ export default function LoginPage() {
         <Button
           type="submit"
           size="lg"
-          className="w-full"
+          className="auth-btn-primary w-full focus-visible:ring-white/30"
           disabled={isSubmitting}
         >
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -85,11 +87,11 @@ export default function LoginPage() {
         </Button>
       </motion.form>
 
-      <p className="mt-6 text-center text-xs text-muted-foreground">
+      <p className="mt-6 text-center text-xs text-white/50">
         No account yet?{" "}
         <Link
           href="/signup"
-          className="font-medium text-accent hover:underline"
+          className="font-medium text-white underline-offset-4 hover:underline"
         >
           Sign up
         </Link>

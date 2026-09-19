@@ -168,3 +168,18 @@ create policy "Users manage own notes"
 -- Supabase → SQL Editor (the full create table above already includes it).
 -- ---------------------------------------------------------------------------
 alter table public.tasks add column if not exists notes text;
+
+-- ---------------------------------------------------------------------------
+-- Table privileges. RLS decides WHICH rows are visible, but Postgres also
+-- requires table-level GRANTs — without them every query fails with 403
+-- "permission denied" even when the policies pass, and the signup profile
+-- insert fails so new users can never log in.
+-- Nothing is granted to anon: unauthenticated access goes only through the
+-- get_email_for_username RPC above.
+-- ---------------------------------------------------------------------------
+grant select, insert, update, delete on public.profiles to authenticated;
+grant select, insert, update, delete on public.dropdown_options to authenticated;
+grant select, insert, update, delete on public.job_applications to authenticated;
+grant select, insert, update, delete on public.hackathons to authenticated;
+grant select, insert, update, delete on public.tasks to authenticated;
+grant select, insert, update, delete on public.notes to authenticated;

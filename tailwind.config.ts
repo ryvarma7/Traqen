@@ -16,54 +16,54 @@ const config: Config = {
     },
     extend: {
       colors: {
-        // ── Olive + light-orange palette ──────────────────────────────────────
-        background:   "#F2F0E6",   // warm parchment
-        foreground:   "#262B1A",   // deep olive-black
-        surface:      "#FDFCF8",   // creamy white card surface
-        border:       "#C8C5A8",   // warm olive-grey border
+        // ── Monochrome black + white palette (matches login page) ────────────
+        background:   "#000000",   // pure black — same as auth pages
+        foreground:   "#FFFFFF",   // white text
+        surface:      "#0B0B0B",   // card surface — same as auth card
+        border:       "#1A1A1A",   // ≈ white/10 on black, like auth borders
         muted: {
-          DEFAULT:    "#EAE8D8",   // tinted muted surface
-          foreground: "#717863",   // olive-grey secondary text
+          DEFAULT:    "#111111",   // tinted muted surface
+          foreground: "#C4C4C4",   // brighter grey secondary text
         },
         accent: {
-          DEFAULT:    "#D97B0A",   // warm deep orange
-          foreground: "#FFFFFF",
-          soft:       "#FDF0DC",   // very light orange tint
-          subtle:     "#F5E4C0",   // slightly stronger for hover states
+          DEFAULT:    "#FFFFFF",   // monochrome accent
+          foreground: "#000000",
+          soft:       "#141414",   // dark tint behind accents
+          subtle:     "#1F1F1F",   // hover states
         },
-        // ── Semantic colours (kept neutral — works with any palette) ──────────
+        // ── Semantic colours (hues kept — tuned to read on black) ────────────
         success: {
-          DEFAULT: "#2F9E44",
-          soft:    "#EBFBEE",
-          border:  "#B2F2BB",
+          DEFAULT: "#51CF66",
+          soft:    "#0F2E18",
+          border:  "#2B6E3F",
         },
         danger: {
-          DEFAULT: "#E03131",
-          soft:    "#FFF5F5",
-          border:  "#FFC9C9",
+          DEFAULT: "#FF6B6B",
+          soft:    "#33151A",
+          border:  "#7A2E35",
         },
         warning: {
-          DEFAULT: "#F08C00",
-          soft:    "#FFF9DB",
-          border:  "#FFEC99",
+          DEFAULT: "#FFD43B",
+          soft:    "#332A10",
+          border:  "#7A6423",
         },
         info: {
-          DEFAULT: "#1971C2",
-          soft:    "#E7F5FF",
-          border:  "#A5D8FF",
+          DEFAULT: "#4DABF7",
+          soft:    "#0F2438",
+          border:  "#275E8E",
         },
-        // ── Brand olive tones (for icon containers, brand panel bg) ──────────
+        // ── Olive scale (kept for compatibility — now neutral greys) ─────────
         olive: {
-          50:  "#F5F4EC",
-          100: "#EAE8D8",
-          200: "#D5D2BC",
-          300: "#BCBA9A",
-          400: "#9FA07B",
-          500: "#6B744C",   // true olive
-          600: "#57603C",
-          700: "#434C2E",
-          800: "#2F3520",
-          900: "#1C2012",
+          50:  "#0E0E0E",
+          100: "#131313",
+          200: "#1A1A1A",
+          300: "#232323",
+          400: "#2E2E2E",
+          500: "#474747",
+          600: "#616161",
+          700: "#828282",
+          800: "#A8A8A8",
+          900: "#D4D4D4",
         },
       },
       borderRadius: {
@@ -71,15 +71,15 @@ const config: Config = {
         field: "8px",
       },
       boxShadow: {
-        lift:   "0 4px 18px rgba(38, 43, 26, 0.12)",
-        sheet:  "0 -8px 36px rgba(38, 43, 26, 0.16)",
-        modal:  "0 16px 48px rgba(38, 43, 26, 0.22)",
-        glow:   "0 0 0 3px rgba(217, 123, 10, 0.18)",
-        inset:  "inset 0 1px 3px rgba(38, 43, 26, 0.06)",
+        lift:   "0 4px 18px rgba(0, 0, 0, 0.50)",
+        sheet:  "0 -8px 36px rgba(0, 0, 0, 0.60)",
+        modal:  "0 16px 48px rgba(0, 0, 0, 0.70)",
+        glow:   "0 0 0 3px rgba(255, 255, 255, 0.12)",
+        inset:  "inset 0 1px 3px rgba(0, 0, 0, 0.30)",
       },
       fontFamily: {
-        sans: ["var(--font-lora)", "Georgia", "serif"],
-        mono: ["var(--font-geist-mono)", "ui-monospace", "monospace"],
+        sans: ["var(--font-raleway)", "system-ui", "sans-serif"],
+        mono: ["var(--font-raleway)", "system-ui", "sans-serif"],
       },
       fontSize: {
         "2xs": ["0.75rem",   { lineHeight: "1rem" }],

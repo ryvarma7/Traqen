@@ -21,7 +21,7 @@ export function AttentionStrip({ items }: { items: AttentionItem[] }) {
       <h2 className="mb-2.5 flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
         <span
           className="inline-block h-1.5 w-4 rounded-full"
-          style={{ background: "linear-gradient(90deg, #D97B0A, #F0A030)" }}
+          style={{ background: "linear-gradient(90deg, #FFFFFF, #8A8A8A)" }}
           aria-hidden
         />
         Needs attention
@@ -39,7 +39,7 @@ export function AttentionStrip({ items }: { items: AttentionItem[] }) {
               href={item.href}
               className="group flex min-w-56 items-center justify-between gap-3 rounded-card glass-tile px-3.5 py-2.5 transition-all hover:shadow-lift md:min-w-0"
               style={{
-                borderLeft: "3px solid #D97B0A",
+                borderLeft: "3px solid rgba(255, 255, 255, 0.85)",
               }}
             >
               <div className="min-w-0">
@@ -47,7 +47,7 @@ export function AttentionStrip({ items }: { items: AttentionItem[] }) {
                   {item.title}
                 </p>
                 <p className="mt-0.5 flex items-center gap-1.5 truncate text-2xs text-muted-foreground">
-                  <CalendarClock className="h-3 w-3 shrink-0" style={{ color: "#D97B0A", opacity: 0.8 }} />
+                  <CalendarClock className="h-3 w-3 shrink-0 text-muted-foreground" />
                   {item.meta}
                 </p>
               </div>

@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { PageTransition } from "@/components/shell/page-transition";
-import { TopBar } from "@/components/shell/top-bar";
 import { NotesView } from "@/components/notes/notes-view";
 import { createClient } from "@/lib/supabase/server";
 
@@ -9,24 +8,18 @@ export const dynamic = "force-dynamic";
 export default async function NotesPage() {
   const supabase = createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  // Auth check runs in parallel with the read; RLS scopes rows to auth.uid().
+  const [userRes, notesRes] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.from("notes").select("*"),
+  ]);
 
-  const { data } = await supabase
-    .from("notes")
-    .select("*")
-    .eq("user_id", user.id);
+  if (!userRes.data.user) redirect("/login");
 
   return (
     <>
-      <TopBar />
       <PageTransition>
-        <h1 className="mb-6 text-xl font-semibold tracking-tight text-foreground md:text-2xl">
-          Notes
-        </h1>
-        <NotesView notes={data ?? []} />
+        <NotesView notes={notesRes.data ?? []} />
       </PageTransition>
     </>
   );

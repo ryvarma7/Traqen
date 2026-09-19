@@ -22,19 +22,19 @@ export function CountdownPill({
     tone = "bg-danger-soft/80 text-danger border-danger-border/70";
   } else if (days <= 3) {
     label = `${days}d left`;
-    tone = "bg-orange-50/80 text-orange-600 border-orange-200/70";
+    tone = "bg-orange-500/10 text-orange-400 border-orange-500/30";
   } else if (days <= 7) {
     label = `${days}d left`;
     tone = "bg-warning-soft/80 text-warning border-warning-border/70";
   } else {
     label = `${formatShortDate(date)}`;
-    tone = "bg-white/60 text-muted-foreground border-white/70";
+    tone = "bg-white/5 text-muted-foreground border-white/15";
   }
 
   return (
     <span
       className={cn(
-        "inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 font-mono text-2xs font-medium tabular-nums shadow-[inset_0_1px_1px_rgba(255,255,255,0.8)] backdrop-blur-sm",
+        "inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 font-mono text-2xs font-medium tabular-nums backdrop-blur-sm",
         tone,
         className
       )}

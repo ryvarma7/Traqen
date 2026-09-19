@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { TopBar } from "@/components/shell/top-bar";
 
 /** Shared page entrance: fade + 8px slide, ~200ms (spec). */
 export function PageTransition({ children }: { children: React.ReactNode }) {
@@ -10,8 +11,9 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      className="mx-auto w-full max-w-5xl px-4 pb-24 pt-20"
+      className="app-scene mx-auto w-full max-w-5xl px-4 pb-24 pt-6 md:pt-8"
     >
+      <TopBar />
       {children}
     </motion.main>
   );

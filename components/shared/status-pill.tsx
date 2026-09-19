@@ -14,7 +14,7 @@ const STATUS_TONES: Record<string, string> = {
   "In progress": "bg-info-soft/80 text-info border-info-border/70",
 };
 
-const DEFAULT_TONE = "bg-white/60 text-muted-foreground border-white/70";
+const DEFAULT_TONE = "bg-white/5 text-muted-foreground border-white/15";
 
 export function StatusPill({
   status,
@@ -26,7 +26,7 @@ export function StatusPill({
   return (
     <span
       className={cn(
-        "inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-2xs font-medium shadow-[inset_0_1px_1px_rgba(255,255,255,0.8)] backdrop-blur-sm",
+        "inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-2xs font-medium backdrop-blur-sm",
         STATUS_TONES[status] ?? DEFAULT_TONE,
         className
       )}

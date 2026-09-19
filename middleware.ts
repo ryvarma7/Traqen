@@ -21,6 +21,26 @@ export async function middleware(request: NextRequest) {
     );
   }
 
+  const path = request.nextUrl.pathname;
+  const isAuthPage = AUTH_PAGES.includes(path);
+
+  // Fast path: no session cookie means there is nothing to refresh at
+  // Supabase, so skip the auth round-trip entirely. Note: @supabase/ssr
+  // chunks oversized sessions as sb-<ref>-auth-token.0/.1/…, so match on
+  // includes("auth-token") — endsWith would miss chunked sessions and
+  // bounce a freshly signed-in user straight back to /login.
+  const hasSessionCookie = request.cookies
+    .getAll()
+    .some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
+
+  if (!hasSessionCookie) {
+    if (isAuthPage) return NextResponse.next({ request });
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/login";
+    redirectUrl.search = "";
+    return NextResponse.redirect(redirectUrl);
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(url, supabaseKey, {
@@ -45,9 +65,6 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const path = request.nextUrl.pathname;
-  const isAuthPage = AUTH_PAGES.includes(path);
 
   if (!user && !isAuthPage) {
     const redirectUrl = request.nextUrl.clone();

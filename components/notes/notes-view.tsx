@@ -190,13 +190,13 @@ export function NotesView({ notes }: { notes: Note[] }) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="absolute inset-0 bg-foreground/30"
+              className="absolute inset-0 bg-black/60"
               onClick={close}
             />
             <motion.div
-              initial={isMobile ? { y: "100%" } : { opacity: 0, scale: 0.96 }}
-              animate={isMobile ? { y: 0 } : { opacity: 1, scale: 1 }}
-              exit={isMobile ? { y: "100%" } : { opacity: 0, scale: 0.96 }}
+              initial={isMobile ? { y: "100%" } : { opacity: 0, scale: 0.96, x: "-50%", y: "-50%" }}
+              animate={isMobile ? { y: 0 } : { opacity: 1, scale: 1, x: "-50%", y: "-50%" }}
+              exit={isMobile ? { y: "100%" } : { opacity: 0, scale: 0.96, x: "-50%", y: "-50%" }}
               transition={
                 isMobile
                   ? { type: "spring", stiffness: 380, damping: 34 }
@@ -206,7 +206,7 @@ export function NotesView({ notes }: { notes: Note[] }) {
                 "absolute flex flex-col glass-modal overflow-hidden",
                 isMobile
                   ? "inset-0 rounded-t-card"
-                  : "left-1/2 top-1/2 max-h-[85vh] w-full max-w-xl -translate-x-1/2 -translate-y-1/2 rounded-card"
+                  : "left-1/2 top-1/2 max-h-[85vh] w-full max-w-xl rounded-card"
               )}
             >
               <div className="flex shrink-0 items-center justify-between border-b border-border bg-muted/60 px-5 py-3.5">
@@ -257,7 +257,7 @@ export function NotesView({ notes }: { notes: Note[] }) {
                           onClick={() => setColor(c)}
                           className={cn(
                             "flex h-7 w-7 items-center justify-center rounded-full transition-transform hover:scale-110",
-                            color === c && "ring-2 ring-accent ring-offset-2"
+                            color === c && "ring-2 ring-accent ring-offset-2 ring-offset-surface"
                           )}
                         >
                           <ColorDot color={c} className="h-3.5 w-3.5" />

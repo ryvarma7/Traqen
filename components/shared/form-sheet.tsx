@@ -42,7 +42,7 @@ export function FormSheet({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="absolute inset-0 bg-foreground/20 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={onClose}
           />
 
@@ -87,7 +87,7 @@ function SheetHeader({
   onClose: () => void;
 }) {
   return (
-    <div className="flex shrink-0 items-center justify-between border-b border-white/60 bg-white/40 px-5 py-3.5 backdrop-blur-md md:px-6">
+    <div className="flex shrink-0 items-center justify-between border-b border-border bg-muted/60 px-5 py-3.5 md:px-6">
       <h2 className="text-base font-semibold tracking-tight text-foreground">
         {title}
       </h2>

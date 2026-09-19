@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { AttentionStrip, type AttentionItem } from "@/components/hub/attention-strip";
 import { NavCards, type HubCard } from "@/components/hub/nav-cards";
 import { PageTransition } from "@/components/shell/page-transition";
-import { TopBar } from "@/components/shell/top-bar";
 import { createClient } from "@/lib/supabase/server";
 import { daysUntil } from "@/lib/dates";
 import {
@@ -15,17 +14,17 @@ export const dynamic = "force-dynamic";
 export default async function HubPage() {
   const supabase = createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const [jobsRes, hackathonsRes, tasksRes, notesRes] = await Promise.all([
-    supabase.from("job_applications").select("id, company, status, deadline, follow_up_date").eq("user_id", user.id),
-    supabase.from("hackathons").select("id, hackathon_name, status, deadline, follow_up_date").eq("user_id", user.id),
-    supabase.from("tasks").select("id, title, status, due_date").eq("user_id", user.id),
-    supabase.from("notes").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+  // Auth check runs in parallel with the reads — the queries don't need
+  // user.id because RLS already scopes every table to auth.uid().
+  const [userRes, jobsRes, hackathonsRes, tasksRes, notesRes] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.from("job_applications").select("id, company, status, deadline, follow_up_date"),
+    supabase.from("hackathons").select("id, hackathon_name, status, deadline, follow_up_date"),
+    supabase.from("tasks").select("id, title, status, due_date"),
+    supabase.from("notes").select("id", { count: "exact", head: true }),
   ]);
+
+  if (!userRes.data.user) redirect("/login");
 
   const jobs = jobsRes.data ?? [];
   const hackathons = hackathonsRes.data ?? [];
@@ -100,11 +99,7 @@ export default async function HubPage() {
 
   return (
     <>
-      <TopBar />
       <PageTransition>
-        <h1 className="mb-6 text-xl font-semibold tracking-tight text-foreground md:text-2xl">
-          Home
-        </h1>
         <AttentionStrip items={attention} />
         <NavCards cards={cards} />
       </PageTransition>

@@ -25,6 +25,7 @@ import {
   saveJobApplicationNotes,
 } from "@/lib/actions/applications";
 import { daysUntil } from "@/lib/dates";
+import { DEFAULT_OPTIONS, optionsForField } from "@/lib/defaults";
 import { cn } from "@/lib/utils";
 import type { DropdownOption, Hackathon, JobApplication } from "@/lib/types";
 
@@ -61,10 +62,21 @@ export function ApplicationsView({
 
   const section = tab === "jobs" ? "jobs" : "hackathons";
   const customOptions = React.useMemo(() => {
-    const map: Record<string, string[]> = {};
+    // User-added ("+ Add new") values grouped per field…
+    const userValues: Record<string, string[]> = {};
     for (const option of dropdownOptions) {
       if (option.section !== section) continue;
-      (map[option.field_name] ??= []).push(option.value);
+      (userValues[option.field_name] ??= []).push(option.value);
+    }
+    // …then merged onto the built-in defaults (defaults first, deduped).
+    const map: Record<string, string[]> = {};
+    const fields = DEFAULT_OPTIONS[section] ?? {};
+    for (const fieldName of Object.keys(fields)) {
+      map[fieldName] = optionsForField(section, fieldName, userValues[fieldName] ?? []);
+    }
+    // Keep any user-added fields that have no defaults.
+    for (const [fieldName, values] of Object.entries(userValues)) {
+      map[fieldName] ??= values;
     }
     return map;
   }, [dropdownOptions, section]);
