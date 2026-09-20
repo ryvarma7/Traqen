@@ -55,3 +55,18 @@ export async function deleteNote(id: string): Promise<ActionResult> {
   revalidatePath("/notes");
   return {};
 }
+
+export async function setNotePrivacy(
+  id: string,
+  isPrivate: boolean
+): Promise<ActionResult> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("notes")
+    .update({ private: isPrivate })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/");
+  revalidatePath("/notes");
+  return {};
+}

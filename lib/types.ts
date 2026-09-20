@@ -72,6 +72,7 @@ export type Note = {
   content: string | null;
   pinned: boolean;
   color: string;
+  private: boolean;
   created_at: string;
   updated_at: string;
 };

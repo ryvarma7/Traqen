@@ -152,6 +152,7 @@ create table public.notes (
   content text,
   pinned boolean default false,
   color text default 'gray',
+  private boolean default false,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -168,6 +169,13 @@ create policy "Users manage own notes"
 -- Supabase → SQL Editor (the full create table above already includes it).
 -- ---------------------------------------------------------------------------
 alter table public.tasks add column if not exists notes text;
+
+-- ---------------------------------------------------------------------------
+-- Migration for existing databases: add the privacy flag to notes.
+-- If your notes table already exists, run just this statement once in
+-- Supabase → SQL Editor (the full create table above already includes it).
+-- ---------------------------------------------------------------------------
+alter table public.notes add column if not exists private boolean default false;
 
 -- ---------------------------------------------------------------------------
 -- Table privileges. RLS decides WHICH rows are visible, but Postgres also

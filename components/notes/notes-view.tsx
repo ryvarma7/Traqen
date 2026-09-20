@@ -2,14 +2,14 @@
 
 import * as React from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { Pencil, Pin, Plus, Trash2, X } from "lucide-react";
+import { Eye, EyeOff, Pencil, Pin, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { ColorDot, NOTE_COLORS } from "@/components/notes/color-dot";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { deleteNote, saveNote } from "@/lib/actions/notes";
+import { deleteNote, saveNote, setNotePrivacy } from "@/lib/actions/notes";
 import { relativeTime } from "@/lib/dates";
 import { useIsMobile } from "@/lib/hooks";
 import type { Note } from "@/lib/types";
@@ -35,6 +35,8 @@ export function NotesView({ notes }: { notes: Note[] }) {
   const [color, setColor] = React.useState("gray");
   const [pinned, setPinned] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  // Optimistic privacy overrides keyed by note id until revalidation lands.
+  const [privacy, setPrivacy] = React.useState<Record<string, boolean>>({});
 
   const isMobile = useIsMobile();
   const viewing = notes.find((n) => n.id === viewingId) ?? null;
@@ -106,6 +108,18 @@ export function NotesView({ notes }: { notes: Note[] }) {
     close();
   };
 
+  const isHidden = (note: Note) => privacy[note.id] ?? note.private;
+
+  const togglePrivacy = async (note: Note) => {
+    const next = !isHidden(note);
+    setPrivacy((prev) => ({ ...prev, [note.id]: next }));
+    const result = await setNotePrivacy(note.id, next);
+    if (result.error) {
+      setPrivacy((prev) => ({ ...prev, [note.id]: !next }));
+      toast.error(result.error);
+    }
+  };
+
   const startEditing = () => {
     if (!viewing) return;
     setTitle(viewing.title);
@@ -141,30 +155,62 @@ export function NotesView({ notes }: { notes: Note[] }) {
           className="columns-1 gap-3.5 sm:columns-2 lg:columns-3"
         >
           {sorted.map((note) => (
-            <motion.button
+            <motion.div
               key={note.id}
               variants={tileVariants}
               whileTap={{ scale: 0.98 }}
-              type="button"
+              role="button"
+              tabIndex={0}
               onClick={() => openNote(note)}
-              className="mb-3.5 flex min-h-32 w-full break-inside-avoid flex-col rounded-card glass-tile glass-tile-hover p-4 text-left"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openNote(note);
+                }
+              }}
+              className="mb-3.5 flex min-h-32 w-full cursor-pointer break-inside-avoid flex-col rounded-card glass-tile glass-tile-hover p-4 text-left"
             >
               <div className="flex items-center gap-2">
                 {note.color !== "gray" && <ColorDot color={note.color} />}
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                   {note.title}
                 </span>
+                {note.content && (
+                  <button
+                    type="button"
+                    aria-label={
+                      isHidden(note)
+                        ? "Show preview on notes page"
+                        : "Hide preview on notes page"
+                    }
+                    title={isHidden(note) ? "Show preview" : "Hide preview"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      togglePrivacy(note);
+                    }}
+                    className="shrink-0 rounded-field p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    {isHidden(note) ? (
+                      <EyeOff className="h-3.5 w-3.5" />
+                    ) : (
+                      <Eye className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                )}
                 {note.pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
               </div>
-              {note.content && (
-                <p className="mt-1.5 whitespace-pre-wrap text-xs text-muted-foreground">
-                  {note.content}
-                </p>
-              )}
+              {note.content &&
+                (isHidden(note) ? (
+                  <p className="mt-1.5 text-xs italic text-muted-foreground">Content hidden</p>
+                ) : (
+                  <p className="mt-1.5 line-clamp-5 whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                    {note.content}
+                  </p>
+                ))}
               <span className="mt-auto pt-3 text-2xs text-muted-foreground">
                 {relativeTime(note.updated_at)}
               </span>
-            </motion.button>
+            </motion.div>
           ))}
         </motion.div>
       )}
@@ -277,7 +323,7 @@ export function NotesView({ notes }: { notes: Note[] }) {
                 ) : (
                   <>
                     {viewing?.content ? (
-                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
                         {viewing.content}
                       </p>
                     ) : (
@@ -305,6 +351,25 @@ export function NotesView({ notes }: { notes: Note[] }) {
                     <Button size="lg" variant="outline" className="flex-1" onClick={startEditing}>
                       <Pencil className="h-4 w-4" /> Edit
                     </Button>
+                    {viewing?.content && (
+                      <Button
+                        size="lg"
+                        variant="ghost"
+                        aria-label={
+                          isHidden(viewing)
+                            ? "Show preview on notes page"
+                            : "Hide preview on notes page"
+                        }
+                        title={isHidden(viewing) ? "Show preview" : "Hide preview"}
+                        onClick={() => togglePrivacy(viewing)}
+                      >
+                        {isHidden(viewing) ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
+                    )}
                     <Button
                       size="lg"
                       variant="ghost"

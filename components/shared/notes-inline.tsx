@@ -84,7 +84,7 @@ export function NotesInline({
           </div>
         </div>
       ) : value ? (
-        <p className="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed text-foreground">
+        <p className="mt-1.5 whitespace-pre-wrap break-words text-xs leading-relaxed text-foreground">
           {value}
         </p>
       ) : (
