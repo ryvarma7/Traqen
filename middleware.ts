@@ -84,5 +84,10 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:woff2?|png|svg|ico)$).*)"],
+  // manifest.webmanifest and sw.js must stay public: the browser fetches them
+  // without a session when checking PWA installability, so auth-redirecting
+  // them makes Chrome report "This app cannot be installed".
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|(?:manifest\\.webmanifest|sw\\.js)$|.*\\.(?:woff2?|png|svg|ico)$).*)",
+  ],
 };
