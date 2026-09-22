@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { motion, type Variants } from "framer-motion";
-import { ArrowRight, Briefcase, ClipboardList, StickyNote } from "lucide-react";
+import { ArrowRight, Briefcase, ClipboardList, GraduationCap, StickyNote } from "lucide-react";
 import Link from "next/link";
 
 const container: Variants = {
@@ -21,10 +21,15 @@ export type HubCard = {
   description: string;
   count: number;
   countLabel: string;
-  icon: "briefcase" | "tasks" | "notes";
+  icon: "briefcase" | "tasks" | "notes" | "tracks";
 };
 
-const icons = { briefcase: Briefcase, tasks: ClipboardList, notes: StickyNote };
+const icons = {
+  briefcase: Briefcase,
+  tasks: ClipboardList,
+  notes: StickyNote,
+  tracks: GraduationCap,
+};
 
 // Each section card gets a subtle white tint for the icon zone
 const iconStyles: Record<HubCard["icon"], { bg: string; iconColor: string; border: string }> = {
@@ -43,6 +48,11 @@ const iconStyles: Record<HubCard["icon"], { bg: string; iconColor: string; borde
     border:    "rgba(255, 255, 255, 0.18)",
     iconColor: "#FFFFFF",
   },
+  tracks: {
+    bg:        "linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 100%)",
+    border:    "rgba(255, 255, 255, 0.18)",
+    iconColor: "#FFFFFF",
+  },
 };
 
 export function NavCards({ cards }: { cards: HubCard[] }) {
@@ -51,7 +61,7 @@ export function NavCards({ cards }: { cards: HubCard[] }) {
       variants={container}
       initial="hidden"
       animate="visible"
-      className="grid grid-cols-1 gap-4 md:grid-cols-3"
+      className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4"
     >
       {cards.map(({ href, title, description, count, countLabel, icon }) => {
         const Icon = icons[icon];

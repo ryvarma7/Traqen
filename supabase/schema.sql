@@ -178,6 +178,69 @@ alter table public.tasks add column if not exists notes text;
 alter table public.notes add column if not exists private boolean default false;
 
 -- ---------------------------------------------------------------------------
+-- Learning tracks (Course Tracker).
+-- AI plans a course externally; the user pastes the JSON plan and Traqen
+-- normalizes it into tracks → phases → items rows for visual tracking.
+-- ---------------------------------------------------------------------------
+create table public.learning_tracks (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  title text not null,
+  description text,
+  start_date date not null,
+  status text default 'In progress' check (status in ('In progress','Completed','On hold')),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table public.learning_tracks enable row level security;
+create policy "Users manage own learning tracks"
+  on public.learning_tracks for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create table public.track_phases (
+  id uuid primary key default uuid_generate_v4(),
+  track_id uuid references public.learning_tracks(id) on delete cascade not null,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  position int not null default 0,
+  title text not null,
+  description text
+);
+
+alter table public.track_phases enable row level security;
+create policy "Users manage own track phases"
+  on public.track_phases for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create table public.track_items (
+  id uuid primary key default uuid_generate_v4(),
+  track_id uuid references public.learning_tracks(id) on delete cascade not null,
+  phase_id uuid references public.track_phases(id) on delete cascade not null,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  position int not null default 0,
+  title text not null,
+  description text,
+  resource_url text,
+  target_date date,
+  status text default 'To do' check (status in ('To do','In progress','Done')),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table public.track_items enable row level security;
+create policy "Users manage own track items"
+  on public.track_items for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- Helpful indexes for the hub/dashboard aggregates.
+create index if not exists idx_track_items_track_id on public.track_items(track_id);
+create index if not exists idx_track_phases_track_id on public.track_phases(track_id);
+create index if not exists idx_learning_tracks_user_id on public.learning_tracks(user_id);
+
+-- ---------------------------------------------------------------------------
 -- Table privileges. RLS decides WHICH rows are visible, but Postgres also
 -- requires table-level GRANTs — without them every query fails with 403
 -- "permission denied" even when the policies pass, and the signup profile
@@ -191,3 +254,6 @@ grant select, insert, update, delete on public.job_applications to authenticated
 grant select, insert, update, delete on public.hackathons to authenticated;
 grant select, insert, update, delete on public.tasks to authenticated;
 grant select, insert, update, delete on public.notes to authenticated;
+grant select, insert, update, delete on public.learning_tracks to authenticated;
+grant select, insert, update, delete on public.track_phases to authenticated;
+grant select, insert, update, delete on public.track_items to authenticated;

@@ -86,6 +86,41 @@ export type DropdownOption = {
   created_at: string;
 };
 
+export type LearningTrack = {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  start_date: string;
+  status: "In progress" | "Completed" | "On hold";
+  created_at: string;
+  updated_at: string;
+};
+
+export type TrackPhase = {
+  id: string;
+  track_id: string;
+  user_id: string;
+  position: number;
+  title: string;
+  description: string | null;
+};
+
+export type TrackItem = {
+  id: string;
+  track_id: string;
+  phase_id: string;
+  user_id: string;
+  position: number;
+  title: string;
+  description: string | null;
+  resource_url: string | null;
+  target_date: string | null;
+  status: "To do" | "In progress" | "Done";
+  created_at: string;
+  updated_at: string;
+};
+
 export const JOB_STATUSES = [
   "Saved",
   "Applied",
