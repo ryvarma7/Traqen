@@ -8,6 +8,7 @@ import {
   Check,
   ClipboardPaste,
   Copy,
+  Globe,
   Loader2,
   Sparkles,
 } from "lucide-react";
@@ -15,12 +16,12 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { FormSheet } from "@/components/shared/form-sheet";
 import { importTrack } from "@/lib/actions/tracks";
-import { MASTER_PROMPT, parseTrackJson, type ParsedTrack } from "@/lib/tracks/contract";
+import { buildPrompt, parseTrackInput, type ParsedTrack } from "@/lib/tracks/contract";
 import { cn } from "@/lib/utils";
 
 const spring = { type: "spring", stiffness: 400, damping: 36 } as const;
 
-const STEPS = ["Prompt", "Plan", "Paste", "Review"] as const;
+const STEPS = ["Details", "Plan", "Paste", "Review"] as const;
 
 function todayISO(): string {
   const d = new Date();
@@ -45,6 +46,17 @@ export function ImportTrackModal({
   const [saving, setSaving] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
 
+  // Step 1 form fields
+  const [topic, setTopic] = React.useState("");
+  const [specs, setSpecs] = React.useState("");
+  const [timeframe, setTimeframe] = React.useState("");
+  const [courseUrl, setCourseUrl] = React.useState("");
+
+  const generatedPrompt = React.useMemo(
+    () => buildPrompt({ topic, specs, timeframe, courseUrl }),
+    [topic, specs, timeframe, courseUrl]
+  );
+
   const reset = React.useCallback(() => {
     setStep(0);
     setRaw("");
@@ -53,6 +65,10 @@ export function ImportTrackModal({
     setStartDate(todayISO());
     setSaving(false);
     setCopied(false);
+    setTopic("");
+    setSpecs("");
+    setTimeframe("");
+    setCourseUrl("");
   }, []);
 
   const close = () => {
@@ -61,18 +77,22 @@ export function ImportTrackModal({
   };
 
   const copyPrompt = async () => {
+    if (!topic.trim()) {
+      toast.error("Enter what you want to learn first");
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(MASTER_PROMPT);
+      await navigator.clipboard.writeText(generatedPrompt);
       setCopied(true);
       toast.success("Prompt copied — paste it into your AI app");
       setTimeout(() => setCopied(false), 2500);
     } catch {
-      toast.error("Couldn't copy — select the text below and copy manually");
+      toast.error("Couldn't copy — select the text and copy manually");
     }
   };
 
   const handleParse = () => {
-    const result = parseTrackJson(raw);
+    const result = parseTrackInput(raw);
     if (result.ok) {
       setTrack(result.track);
       setParseError(null);
@@ -98,6 +118,9 @@ export function ImportTrackModal({
   };
 
   const totalItems = track?.phases.reduce((n, p) => n + p.items.length, 0) ?? 0;
+
+  const inputClass =
+    "w-full rounded-field glass-input px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50";
 
   return (
     <FormSheet open={open} onClose={close} title="Import learning track">
@@ -136,33 +159,98 @@ export function ImportTrackModal({
         </div>
 
         <AnimatePresence mode="wait">
-          {/* ── Step 1: copy the master prompt ──────────────────────────── */}
+          {/* ── Step 1: fill in details, copy generated prompt ────────────── */}
           {step === 0 && (
-            <motion.div
-              key="s0"
-              {...slideFade}
-              className="space-y-4"
-            >
+            <motion.div key="s0" {...slideFade} className="space-y-4">
               <div className="space-y-1.5">
                 <h3 className="text-sm font-semibold text-foreground">
-                  1 · Copy the planning prompt
+                  1 · Tell us what you want to learn
                 </h3>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  This prompt tells any AI (ChatGPT, Claude, Gemini…) exactly
-                  what shape the plan must have. Then paste it there along with
-                  what you want to learn.
+                  Fill in the details — we&apos;ll build a ready-to-paste prompt
+                  for your AI app.
                 </p>
               </div>
 
-              <div className="relative max-h-52 overflow-y-auto rounded-field glass-input p-3.5 text-xs leading-relaxed text-muted-foreground">
-                <pre className="whitespace-pre-wrap break-words font-sans">{MASTER_PROMPT}</pre>
+              <div className="space-y-3">
+                <div>
+                  <label htmlFor="trk-topic" className="mb-1 block text-xs font-medium text-muted-foreground">
+                    What do you want to learn? <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    id="trk-topic"
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    placeholder="e.g. Web development, Machine learning, Piano…"
+                    className={inputClass}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="trk-specs" className="mb-1 block text-xs font-medium text-muted-foreground">
+                    Specifications &amp; suggestions <span className="font-normal text-muted-foreground/60">(optional)</span>
+                  </label>
+                  <input
+                    id="trk-specs"
+                    value={specs}
+                    onChange={(e) => setSpecs(e.target.value)}
+                    placeholder="e.g. 2 hrs/day, focus on React, include projects…"
+                    className={inputClass}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="trk-time" className="mb-1 block text-xs font-medium text-muted-foreground">
+                    Timeframe <span className="font-normal text-muted-foreground/60">(optional)</span>
+                  </label>
+                  <input
+                    id="trk-time"
+                    value={timeframe}
+                    onChange={(e) => setTimeframe(e.target.value)}
+                    placeholder="e.g. 6 weeks, 3 months, starting April 1…"
+                    className={inputClass}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="trk-url" className="mb-1 block text-xs font-medium text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <Globe className="h-3 w-3" /> Course URL for the AI to reference
+                    </span>{" "}
+                    <span className="font-normal text-muted-foreground/60">(optional)</span>
+                  </label>
+                  <input
+                    id="trk-url"
+                    value={courseUrl}
+                    onChange={(e) => setCourseUrl(e.target.value)}
+                    placeholder="e.g. https://www.udemy.com/course/…"
+                    className={inputClass}
+                  />
+                </div>
               </div>
+
+              {/* Generated prompt preview */}
+              {topic.trim() && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <p className="mb-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Generated prompt preview
+                  </p>
+                  <div className="max-h-44 overflow-y-auto rounded-field glass-input p-3 text-xs leading-relaxed text-muted-foreground">
+                    <pre className="whitespace-pre-wrap break-words font-sans">{generatedPrompt}</pre>
+                  </div>
+                </motion.div>
+              )}
 
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 type="button"
                 onClick={copyPrompt}
-                className="glass-btn-base glass-btn-primary h-11 w-full gap-2 rounded-field text-sm"
+                disabled={!topic.trim()}
+                className="glass-btn-base glass-btn-primary h-11 w-full gap-2 rounded-field text-sm disabled:opacity-40"
               >
                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 {copied ? "Copied!" : "Copy prompt"}
@@ -181,7 +269,7 @@ export function ImportTrackModal({
             </motion.div>
           )}
 
-          {/* ── Step 2: plan in the AI app ──────────────────────────────── */}
+          {/* ── Step 2: plan in the AI app ────────────────────────────────── */}
           {step === 1 && (
             <motion.div key="s1" {...slideFade} className="space-y-4">
               <div className="space-y-1.5">
@@ -189,9 +277,9 @@ export function ImportTrackModal({
                   2 · Get your plan from the AI
                 </h3>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  Open your AI app, paste the prompt, then describe what you
-                  want to learn — e.g. <em>&ldquo;web development, 8 weeks, 2
-                  hours a day, starting March 10&rdquo;</em>. The AI returns a JSON plan.
+                  Open your AI app (ChatGPT, Claude, Gemini…), paste the prompt
+                  you just copied, and hit send. The AI returns a compact plan
+                  in a code block.
                 </p>
               </div>
 
@@ -205,9 +293,10 @@ export function ImportTrackModal({
                       <span className="font-semibold text-foreground">Tips for a better plan:</span>
                     </p>
                     <ul className="list-disc space-y-1 pl-4">
-                      <li>Mention your start date if you have one — the AI will use real dates.</li>
-                      <li>Say how much time you can spend per day or week.</li>
-                      <li>Ask for concrete projects, not just theory.</li>
+                      <li>The prompt already includes your topic, specs, and timeframe — just paste and go.</li>
+                      <li>If you gave a course URL, the AI will try to align with that syllabus.</li>
+                      <li>The output is a compact pipe format, not JSON — much faster to generate.</li>
+                      <li>Copy the entire code block the AI returns.</li>
                     </ul>
                   </div>
                 </div>
@@ -228,13 +317,13 @@ export function ImportTrackModal({
                   onClick={() => setStep(2)}
                   className="glass-btn-base glass-btn-primary h-10 gap-2 rounded-field px-4 text-sm"
                 >
-                  I have the JSON <ArrowRight className="h-3.5 w-3.5" />
+                  I have the plan <ArrowRight className="h-3.5 w-3.5" />
                 </motion.button>
               </div>
             </motion.div>
           )}
 
-          {/* ── Step 3: paste the JSON ──────────────────────────────────── */}
+          {/* ── Step 3: paste the answer ──────────────────────────────────── */}
           {step === 2 && (
             <motion.div key="s2" {...slideFade} className="space-y-4">
               <div className="space-y-1.5">
@@ -242,8 +331,8 @@ export function ImportTrackModal({
                   3 · Paste the AI&apos;s answer
                 </h3>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  Paste everything the AI gave you — code fences or extra text
-                  are fine, we&apos;ll clean it up.
+                  Paste the entire code block the AI returned. Both the compact
+                  pipe format and legacy JSON work.
                 </p>
               </div>
 
@@ -254,7 +343,7 @@ export function ImportTrackModal({
                   setParseError(null);
                 }}
                 rows={9}
-                placeholder='{ "track_title": "…", "phases": [ … ] }'
+                placeholder={"TRACK: Web Dev Fundamentals\nDESC: …\n---\nPHASE: Foundations\nDESC: …\nLearn HTML | Read MDN and build a page | https://mdn.io | +0"}
                 className="w-full resize-y rounded-field glass-input p-3.5 font-mono text-xs leading-relaxed text-foreground placeholder:text-muted-foreground/50"
                 spellCheck={false}
               />
@@ -291,7 +380,7 @@ export function ImportTrackModal({
             </motion.div>
           )}
 
-          {/* ── Step 4: review + start date + save ──────────────────────── */}
+          {/* ── Step 4: review + start date + save ────────────────────────── */}
           {step === 3 && track && (
             <motion.div key="s3" {...slideFade} className="space-y-4">
               <div className="space-y-1.5">
@@ -299,8 +388,8 @@ export function ImportTrackModal({
                   4 · Review and save
                 </h3>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  Looks right? Pick when the track starts (relative &ldquo;day
-                  N&rdquo; steps are counted from here), then save.
+                  Looks right? Pick when the track starts (relative &ldquo;+N
+                  day&rdquo; steps are counted from here), then save.
                 </p>
               </div>
 
