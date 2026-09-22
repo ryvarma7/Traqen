@@ -20,11 +20,12 @@ export function TopBar() {
     <div className="mb-8 flex items-center justify-between">
       <Link href="/" className="transition-opacity hover:opacity-80">
         <Image
-          src="/logo-cropped.png"
+          src="/logo-main.svg"
           alt="Traqen"
-          width={573}
-          height={239}
-          className="h-12 w-auto object-contain brightness-0 invert md:h-14"
+          width={244}
+          height={110}
+          className="h-12 w-auto md:h-14"
+          unoptimized
           priority
         />
       </Link>

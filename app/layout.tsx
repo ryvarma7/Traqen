@@ -20,15 +20,15 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/tabIcon.png", sizes: "16x16",  type: "image/png" },
-      { url: "/tabIcon.png", sizes: "32x32",  type: "image/png" },
-      { url: "/tabIcon.png", sizes: "96x96",  type: "image/png" },
-      { url: "/tabIcon.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-16.png", sizes: "16x16",  type: "image/png" },
+      { url: "/icon-32.png", sizes: "32x32",  type: "image/png" },
+      { url: "/icon-96.png", sizes: "96x96",  type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
     ],
     apple: [
-      { url: "/tabIcon.png", sizes: "180x180", type: "image/png" },
+      { url: "/icon-180.png", sizes: "180x180", type: "image/png" },
     ],
-    shortcut: "/tabIcon.png",
+    shortcut: "/icon-192.png",
   },
 };
 

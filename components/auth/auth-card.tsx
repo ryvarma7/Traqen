@@ -14,14 +14,15 @@ export function AuthCard({
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-black px-4 py-10">
       <AuthBackground />
       <div className="relative w-full max-w-[400px]">
-        {/* Logo — cropped asset has no transparent padding, so it renders at true size */}
+        {/* Logo — already white artwork on transparent ground */}
         <div className="mb-10 flex justify-center">
           <Image
-            src="/logo-cropped.png"
+            src="/logo-main.svg"
             alt="Traqen"
-            width={573}
-            height={239}
-            className="h-16 w-auto object-contain brightness-0 invert md:h-[96px]"
+            width={244}
+            height={110}
+            className="h-16 w-auto md:h-[96px]"
+            unoptimized
             priority
           />
         </div>
