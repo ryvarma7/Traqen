@@ -121,14 +121,6 @@ export default async function HubPage() {
       countLabel: activeTracks === 1 ? "active track" : "active tracks",
       icon: "tracks",
     },
-    {
-      href: "/calendar",
-      title: "Calendar",
-      description: "Every deadline, task and event in one month view.",
-      count: attention.length,
-      countLabel: "coming up",
-      icon: "calendar",
-    },
   ];
 
   return (

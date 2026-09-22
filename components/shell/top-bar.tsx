@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Home, LogOut } from "lucide-react";
+import { CalendarDays, Home, LogOut } from "lucide-react";
 import { logOut } from "@/lib/actions/auth";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +39,12 @@ export function TopBar() {
             </Link>
           </motion.div>
         )}
+        <motion.div whileTap={{ scale: 0.97 }}>
+          <Link href="/calendar" className={linkClass} aria-label="Calendar">
+            <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="hidden md:inline">Calendar</span>
+          </Link>
+        </motion.div>
         <motion.div whileTap={{ scale: 0.97 }}>
           <button
             type="button"

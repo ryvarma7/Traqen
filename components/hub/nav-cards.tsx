@@ -72,7 +72,7 @@ export function NavCards({ cards }: { cards: HubCard[] }) {
       variants={container}
       initial="hidden"
       animate="visible"
-      className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
+      className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4"
     >
       {cards.map(({ href, title, description, count, countLabel, icon }) => {
         const Icon = icons[icon];
