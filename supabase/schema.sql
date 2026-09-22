@@ -9,6 +9,10 @@ create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   username text unique not null,
   email_internal text not null,
+  auth_provider text not null default 'google',
+  -- Per-user UI preferences, e.g. {"calendar_prompt_seen": true,
+  -- "calendar_prompt_answer": "yes"} for the one-time GCal popup.
+  preferences jsonb not null default '{}'::jsonb,
   created_at timestamptz default now()
 );
 
@@ -38,6 +42,62 @@ as $$
 $$;
 
 grant execute on function public.get_email_for_username(text) to anon, authenticated;
+
+-- First Google sign-in: create the profiles row if it doesn't exist yet.
+-- Username is derived from the Google account's email local part and made
+-- unique by appending a numeric suffix on collision. The real Google email
+-- never leaves auth.users — the UI only ever sees the username.
+create or replace function public.ensure_profile()
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := auth.uid();
+  google_email text;
+  base_username text;
+  candidate text;
+  n int;
+begin
+  if uid is null then
+    return null;
+  end if;
+
+  if exists (select 1 from public.profiles where id = uid) then
+    return null;
+  end if;
+
+  select email into google_email from auth.users where id = uid;
+  if google_email is null then
+    return null;
+  end if;
+
+  base_username := regexp_replace(lower(split_part(google_email, '@', 1)), '[^a-z0-9_-]', '', 'g');
+  base_username := left(base_username, 20);
+  if base_username = '' or length(base_username) < 3 then
+    base_username := 'user';
+  end if;
+
+  for n in 0..24 loop
+    candidate := case when n = 0 then base_username else base_username || n::text end;
+    begin
+      insert into public.profiles (id, username, email_internal, auth_provider)
+      values (uid, candidate, google_email, 'google');
+      return candidate;
+    exception when unique_violation then
+      null; -- taken — try the next suffix
+    end;
+  end loop;
+
+  candidate := base_username || floor(random() * 9000 + 1000)::int::text;
+  insert into public.profiles (id, username, email_internal, auth_provider)
+  values (uid, candidate, google_email, 'google');
+  return candidate;
+end;
+$$;
+
+grant execute on function public.ensure_profile() to authenticated;
 
 -- Extensible per-user dropdown options ("+ Add new")
 create table public.dropdown_options (
@@ -74,6 +134,8 @@ create table public.job_applications (
   application_link text,
   source text,
   contact_person text,
+  salary_range text,
+  next_action text,
   notes text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
@@ -108,6 +170,8 @@ create table public.hackathons (
   follow_up_date date,
   application_link text,
   source text,
+  team_status text,
+  submission_link text,
   result_rank text,
   project_link text,
   notes text,
@@ -241,6 +305,25 @@ create index if not exists idx_track_phases_track_id on public.track_phases(trac
 create index if not exists idx_learning_tracks_user_id on public.learning_tracks(user_id);
 
 -- ---------------------------------------------------------------------------
+-- Calendar feedback: the one-time "integrate Google Calendar?" popup on
+-- /calendar. One row per user; the answer + optional suggestion text are
+-- stored server-side so it never reappears on another device.
+-- ---------------------------------------------------------------------------
+create table public.calendar_feedback (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references auth.users(id) on delete cascade not null unique,
+  answer text not null check (answer in ('yes','no')),
+  suggestion text,
+  created_at timestamptz default now()
+);
+
+alter table public.calendar_feedback enable row level security;
+create policy "Users manage own calendar feedback"
+  on public.calendar_feedback for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------------
 -- Table privileges. RLS decides WHICH rows are visible, but Postgres also
 -- requires table-level GRANTs — without them every query fails with 403
 -- "permission denied" even when the policies pass, and the signup profile
@@ -257,3 +340,16 @@ grant select, insert, update, delete on public.notes to authenticated;
 grant select, insert, update, delete on public.learning_tracks to authenticated;
 grant select, insert, update, delete on public.track_phases to authenticated;
 grant select, insert, update, delete on public.track_items to authenticated;
+grant select, insert, update, delete on public.calendar_feedback to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Migration for existing databases: schema v2 (Google OAuth era).
+-- Run each statement once in Supabase → SQL Editor. Fresh installs already
+-- have all of these from the create table statements above.
+-- ---------------------------------------------------------------------------
+alter table public.profiles add column if not exists auth_provider text not null default 'google';
+alter table public.profiles add column if not exists preferences jsonb not null default '{}'::jsonb;
+alter table public.job_applications add column if not exists salary_range text;
+alter table public.job_applications add column if not exists next_action text;
+alter table public.hackathons add column if not exists team_status text;
+alter table public.hackathons add column if not exists submission_link text;

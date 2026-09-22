@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
+// /signup just redirects to /login; keeping it here stops the middleware
+// from bouncing a signed-in user into a redirect loop.
 const AUTH_PAGES = ["/login", "/signup"];
 
 export async function middleware(request: NextRequest) {
@@ -23,6 +25,12 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isAuthPage = AUTH_PAGES.includes(path);
+
+  // The OAuth code exchange lands here with no session cookie yet; let it
+  // through untouched or the code would expire while we redirect to /login.
+  if (path.startsWith("/auth/callback")) {
+    return NextResponse.next({ request });
+  }
 
   // Fast path: no session cookie means there is nothing to refresh at
   // Supabase, so skip the auth round-trip entirely. Note: @supabase/ssr
@@ -88,6 +96,6 @@ export const config = {
   // without a session when checking PWA installability, so auth-redirecting
   // them makes Chrome report "This app cannot be installed".
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|(?:manifest\\.webmanifest|sw\\.js)$|.*\\.(?:woff2?|png|svg|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|auth/callback|(?:manifest\\.webmanifest|sw\\.js)$|.*\\.(?:woff2?|png|svg|ico)$).*)",
   ],
 };

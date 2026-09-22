@@ -2,70 +2,26 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 
 type AuthResult = { error?: string } | undefined;
 
-/** Signup: username + password only. The real Supabase email is generated
- *  internally and never shown in the UI. */
-export async function signUp(
-  username: string,
-  password: string
-): Promise<AuthResult> {
+/** Google is the only sign-in method. Handshake is finished in
+ *  /auth/callback (the route receives the code from Google's redirect);
+ *  this action just redirects the browser to Supabase's hosted consent
+ *  screen and never sees a password. */
+export async function logInWithGoogle(): Promise<AuthResult> {
   const supabase = createClient();
-  const parsedUsername = z.string().trim().min(3).max(24).regex(/^[a-z0-9_-]+$/i).safeParse(username);
-  if (!parsedUsername.success) return { error: "Choose a valid username." };
-  const parsedPassword = z.string().min(8).safeParse(password);
-  if (!parsedPassword.success) return { error: "Password must be at least 8 characters." };
-  const uname = parsedUsername.data.toLowerCase();
-  const email = `${uname}@traqen.local`;
 
-  const { data, error } = await supabase.auth.signUp({ email, password: parsedPassword.data });
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/auth/callback`,
+    },
+  });
   if (error) return { error: error.message };
-  if (!data.user) return { error: "Something went wrong creating your account." };
 
-  const { error: profileError } = await supabase.from("profiles").insert({
-    id: data.user.id,
-    username: uname,
-    email_internal: email,
-  });
-  if (profileError) return { error: profileError.message };
-
-  revalidatePath("/", "layout");
-  redirect("/");
-}
-
-/** Login: resolve username -> internal email via the SECURITY DEFINER RPC,
- *  then sign in with password. The RPC never exposes the profiles table. */
-export async function logIn(
-  username: string,
-  password: string
-): Promise<AuthResult> {
-  const supabase = createClient();
-  const parsedUsername = z.string().trim().min(1).max(24).safeParse(username);
-  const parsedPassword = z.string().min(1).safeParse(password);
-  if (!parsedUsername.success || !parsedPassword.success) {
-    return { error: "Invalid username or password." };
-  }
-  const uname = parsedUsername.data.toLowerCase();
-
-  const { data: email, error: rpcError } = await supabase.rpc(
-    "get_email_for_username",
-    { uname }
-  );
-  if (rpcError || !email) {
-    return { error: "Invalid username or password." };
-  }
-
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password: parsedPassword.data,
-  });
-  if (error) return { error: "Invalid username or password." };
-
-  revalidatePath("/", "layout");
-  redirect("/");
+  redirect(data.url);
 }
 
 export async function logOut(): Promise<AuthResult> {

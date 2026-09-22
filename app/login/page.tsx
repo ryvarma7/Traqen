@@ -1,101 +1,60 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Loader2 } from "lucide-react";
 import { AuthCard } from "@/components/auth/auth-card";
 import { FormError } from "@/components/auth/form-error";
+import { GoogleIcon } from "@/components/auth/google-icon";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { logIn } from "@/lib/actions/auth";
+import { logInWithGoogle } from "@/lib/actions/auth";
 
-const schema = z.object({
-  username: z.string().min(1, "Enter your username"),
-  password: z.string().min(1, "Enter your password"),
-});
+function LoginContent() {
+  const searchParams = useSearchParams();
+  const error = searchParams.get("error");
 
-type FormData = z.infer<typeof schema>;
-
-export default function LoginPage() {
-  const [serverError, setServerError] = React.useState<string | null>(null);
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<FormData>({ resolver: zodResolver(schema) });
-
-  const onSubmit = async (data: FormData) => {
-    setServerError(null);
-    const result = await logIn(data.username, data.password);
-    if (result?.error) setServerError(result.error);
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const result = await logInWithGoogle();
+    // signInWithOAuth only fails when the Supabase provider is
+    // misconfigured; success redirects and never reaches here.
+    if (result?.error) window.location.reload();
   };
 
   return (
     <AuthCard title="Log in" subtitle="Welcome back to Traqen.">
       <motion.form
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2, ease: "easeOut" }}
-        onSubmit={handleSubmit(onSubmit)}
-        className="space-y-4"
+        initial={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
+        animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+        onSubmit={onSubmit}
         noValidate
       >
-        <div className="space-y-1.5">
-          <Label htmlFor="username" className="text-white/70">Username</Label>
-          <Input
-            id="username"
-            autoComplete="username"
-            placeholder="yourname"
-            className="auth-input text-white placeholder:text-white/30"
-            {...register("username")}
-          />
-          {errors.username && (
-            <FormError message={errors.username.message ?? null} />
-          )}
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="password" className="text-white/70">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            autoComplete="current-password"
-            placeholder="••••••••"
-            className="auth-input text-white placeholder:text-white/30"
-            {...register("password")}
-          />
-          {errors.password && (
-            <FormError message={errors.password.message ?? null} />
-          )}
-        </div>
-
-        <FormError message={serverError} />
+        <FormError message={error} />
 
         <Button
           type="submit"
           size="lg"
           className="auth-btn-primary w-full focus-visible:ring-white/30"
-          disabled={isSubmitting}
         >
-          {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-          Log in
+          <GoogleIcon className="h-4 w-4" />
+          Continue with Google
         </Button>
       </motion.form>
 
       <p className="mt-6 text-center text-xs text-white/50">
-        No account yet?{" "}
-        <Link
-          href="/signup"
-          className="font-medium text-white underline-offset-4 hover:underline"
-        >
-          Sign up
-        </Link>
+        New to Traqen? The same button creates your account — no forms.
       </p>
     </AuthCard>
+  );
+}
+
+/** useSearchParams needs a Suspense boundary or the production build
+ *  fails during static page generation. */
+export default function LoginPage() {
+  return (
+    <React.Suspense fallback={null}>
+      <LoginContent />
+    </React.Suspense>
   );
 }
