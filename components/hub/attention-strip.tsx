@@ -30,9 +30,9 @@ export function AttentionStrip({ items }: { items: AttentionItem[] }) {
         {items.map((item, i) => (
           <motion.div
             key={`${item.id}-${item.date}`}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, delay: i * 0.04, ease: "easeOut" }}
+            initial={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
+            animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
+            transition={{ duration: 0.25, delay: i * 0.04, ease: "easeOut" }}
             className="md:flex-1 md:min-w-0"
           >
             <Link

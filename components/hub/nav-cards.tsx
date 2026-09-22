@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { motion, type Variants } from "framer-motion";
-import { ArrowRight, Briefcase, ClipboardList, GraduationCap, StickyNote } from "lucide-react";
+import { ArrowRight, Briefcase, CalendarDays, ClipboardList, GraduationCap, StickyNote } from "lucide-react";
 import Link from "next/link";
 
 const container: Variants = {
@@ -11,8 +11,13 @@ const container: Variants = {
 };
 
 const card: Variants = {
-  hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: "easeOut" } },
+  hidden: { opacity: 0, filter: "blur(8px)", scale: 0.98 },
+  visible: {
+    opacity: 1,
+    filter: "blur(0px)",
+    scale: 1,
+    transition: { duration: 0.25, ease: "easeOut" },
+  },
 };
 
 export type HubCard = {
@@ -21,7 +26,7 @@ export type HubCard = {
   description: string;
   count: number;
   countLabel: string;
-  icon: "briefcase" | "tasks" | "notes" | "tracks";
+  icon: "briefcase" | "tasks" | "notes" | "tracks" | "calendar";
 };
 
 const icons = {
@@ -29,6 +34,7 @@ const icons = {
   tasks: ClipboardList,
   notes: StickyNote,
   tracks: GraduationCap,
+  calendar: CalendarDays,
 };
 
 // Each section card gets a subtle white tint for the icon zone
@@ -53,6 +59,11 @@ const iconStyles: Record<HubCard["icon"], { bg: string; iconColor: string; borde
     border:    "rgba(255, 255, 255, 0.18)",
     iconColor: "#FFFFFF",
   },
+  calendar: {
+    bg:        "linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)",
+    border:    "rgba(255, 255, 255, 0.16)",
+    iconColor: "#E5E5E5",
+  },
 };
 
 export function NavCards({ cards }: { cards: HubCard[] }) {
@@ -61,7 +72,7 @@ export function NavCards({ cards }: { cards: HubCard[] }) {
       variants={container}
       initial="hidden"
       animate="visible"
-      className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4"
+      className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
     >
       {cards.map(({ href, title, description, count, countLabel, icon }) => {
         const Icon = icons[icon];

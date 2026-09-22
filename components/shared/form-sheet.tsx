@@ -8,7 +8,7 @@ import { useIsMobile } from "@/lib/hooks";
 const spring = { type: "spring", stiffness: 380, damping: 34 } as const;
 
 /** Bottom sheet on mobile (spring slide-up), centered modal on desktop
- *  (scale + fade) with Framer glass styling. */
+ *  (blur-in + scale) with Framer glass styling. */
 export function FormSheet({
   open,
   onClose,
@@ -62,10 +62,10 @@ export function FormSheet({
             <div className="absolute inset-0 flex items-center justify-center p-6">
               <motion.div
                 key="modal"
-                initial={{ opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.96 }}
-                transition={{ duration: 0.18, ease: "easeOut" }}
+                initial={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
+                animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
+                exit={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
                 className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-card glass-modal overflow-hidden"
               >
                 <SheetHeader title={title} onClose={onClose} />

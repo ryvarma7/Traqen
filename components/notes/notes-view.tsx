@@ -20,8 +20,13 @@ const listVariants: Variants = {
   visible: { transition: { staggerChildren: 0.05 } },
 };
 const tileVariants: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
+  hidden: { opacity: 0, filter: "blur(8px)", scale: 0.98 },
+  visible: {
+    opacity: 1,
+    filter: "blur(0px)",
+    scale: 1,
+    transition: { duration: 0.25, ease: "easeOut" },
+  },
 };
 
 export function NotesView({ notes }: { notes: Note[] }) {
