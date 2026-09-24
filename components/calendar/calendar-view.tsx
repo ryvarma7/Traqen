@@ -64,6 +64,13 @@ export function CalendarView({
     setCursor((c) => new Date(c.getFullYear(), c.getMonth() + delta, 1));
 
   const selected = selectedKey ? eventsByDate[selectedKey] ?? [] : [];
+  const selectedLabel = selectedKey
+    ? formatCalendarDate(selectedKey, {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      })
+    : "No day selected";
 
   return (
     <div className="glass-section rounded-card p-3 sm:p-4 md:p-5 lg:p-6">
@@ -104,6 +111,13 @@ export function CalendarView({
         </div>
       </div>
 
+      <div className="mb-3 flex items-center justify-between rounded-field border border-border bg-black/20 px-3 py-2 md:hidden">
+        <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+          Selected
+        </span>
+        <span className="text-xs font-medium text-foreground">{selectedLabel}</span>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-[1fr_260px] md:gap-5 lg:gap-6 lg:grid-cols-[1fr_300px]">
         <div className="min-w-0">
           <div className="grid grid-cols-7 border-b border-border pb-2">
@@ -125,6 +139,7 @@ export function CalendarView({
                 <button
                   key={cell.key}
                   type="button"
+                  aria-pressed={isSelected}
                   onClick={() => setSelectedKey(cell.key)}
                   className={cn(
                     "relative flex min-h-[52px] flex-col items-center border-b border-r border-border py-1.5 transition-colors last:border-r-0 sm:min-h-[60px] md:min-h-[76px] md:py-2",
@@ -171,15 +186,7 @@ export function CalendarView({
               exit={{ opacity: 0, filter: "blur(8px)" }}
               transition={{ duration: 0.25, ease: "easeOut" }}
             >
-              <h3 className="mb-3 text-sm font-semibold text-foreground">
-                {selectedKey
-                  ? formatCalendarDate(selectedKey, {
-                      weekday: "long",
-                      month: "long",
-                      day: "numeric",
-                    })
-                  : "No day selected"}
-              </h3>
+              <h3 className="mb-3 text-sm font-semibold text-foreground">{selectedLabel}</h3>
               {selected.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nothing scheduled.</p>
               ) : (

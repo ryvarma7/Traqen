@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { Eye, EyeOff, Pencil, Pin, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { ColorDot, NOTE_COLORS } from "@/components/notes/color-dot";
