@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 export default async function TracksPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Auth check in parallel with the reads; RLS scopes rows to auth.uid().
   const [userRes, tracksRes, itemsRes] = await Promise.all([

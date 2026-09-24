@@ -87,7 +87,7 @@ export function NavCards({ cards }: { cards: HubCard[] }) {
             >
               <Link
                 href={href}
-                className="group relative flex h-full min-h-44 flex-col justify-between overflow-hidden rounded-card glass-tile glass-tile-hover p-5"
+                className="group relative flex h-full min-h-36 flex-col justify-between overflow-hidden rounded-card glass-tile glass-tile-hover p-5 md:min-h-44"
               >
                 {/* Subtle background glow on hover */}
                 <div

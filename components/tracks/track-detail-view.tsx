@@ -175,7 +175,7 @@ export function TrackDetailView({
             type="button"
             onClick={() => setView(id)}
             className={cn(
-              "relative flex h-9 min-w-[72px] flex-1 items-center justify-center gap-1.5 rounded-[7px] px-3 text-xs font-medium transition-colors",
+              "relative flex h-9 min-w-[60px] flex-1 items-center justify-center gap-1.5 rounded-[7px] px-2 text-xs font-medium transition-colors sm:min-w-[72px] sm:px-3",
               view === id ? "text-black" : "text-muted-foreground hover:text-foreground"
             )}
           >

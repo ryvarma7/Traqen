@@ -12,8 +12,9 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
       animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
       exit={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
       transition={{ duration: 0.25, ease: "easeOut" }}
-      className="app-scene mx-auto w-full max-w-5xl px-4 pb-24 pt-6 md:pt-8"
-    >
+      style={{ transformOrigin: "top center" }}
+      className="app-scene mx-auto w-full max-w-5xl px-4 pb-32 pt-5 md:px-6 md:pb-20 md:pt-7 lg:px-8"
+ >
       <TopBar />
       {children}
     </motion.main>

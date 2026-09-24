@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getSiteUrl } from "@/lib/site-url";
 
 /** OAuth code exchange — Supabase redirects here after Google sign-in.
  *  Must stay outside the auth middleware matcher: at this point the
@@ -8,11 +9,13 @@ import { createClient } from "@/lib/supabase/server";
  *  The code is single-use; any failure sends the user back to /login
  *  with an error= query param instead of throwing. */
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const requestUrl = new URL(request.url);
+  const { searchParams } = requestUrl;
+  const origin = getSiteUrl(requestUrl.origin);
   const code = searchParams.get("code");
 
   if (code) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
@@ -20,8 +23,10 @@ export async function GET(request: Request) {
       // the Google account, uniqueness enforced). Returns null when the
       // profile already exists. The real Google email stays inside
       // auth.users and is never surfaced in the UI.
-      const { error: profileError } = await supabase.rpc("ensure_profile");
-      if (!profileError) return NextResponse.redirect(origin);
+      // Provisioning is best-effort: a missing/out-of-date migration must not
+      // strand a user after Google has already authenticated them.
+      await supabase.rpc("ensure_profile");
+      return NextResponse.redirect(new URL("/", origin));
     }
   }
 

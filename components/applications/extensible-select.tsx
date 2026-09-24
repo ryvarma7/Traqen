@@ -47,7 +47,9 @@ export function ExtensibleSelect<T extends FieldValues>({
             onChange={async (e) => {
               if (e.target.value === ADD_NEW) {
                 setAdding(true);
-                requestAnimationFrame(() => inputRef.current?.focus());
+                requestAnimationFrame(() =>
+                  inputRef.current?.focus({ preventScroll: true })
+                );
               } else {
                 field.onChange(e.target.value);
               }
@@ -62,50 +64,58 @@ export function ExtensibleSelect<T extends FieldValues>({
             <option value={ADD_NEW}>+ Add new</option>
           </Select>
 
-          <AnimatePresence>
-            {adding && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.15 }}
-              >
-                <div className="flex gap-2 pt-1.5">
-                  <Input
-                    ref={inputRef}
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    placeholder={`New ${label.toLowerCase()}`}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        save(field.onChange);
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="md"
-                    className="shrink-0"
-                    disabled={saving || !draft.trim()}
-                    onClick={() => save(field.onChange)}
-                  >
-                    <Check className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="md"
-                    className="shrink-0"
-                    onClick={cancel}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <div className="overflow-hidden">
+            <AnimatePresence initial={false}>
+              {adding && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, height: 0 }}
+                  animate={{ opacity: 1, y: 0, height: "auto" }}
+                  exit={{ opacity: 0, y: -6, height: 0 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  className="mt-2"
+                >
+                  <div className="rounded-field border border-white/10 bg-white/[0.02] p-2.5">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        ref={inputRef}
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        placeholder={`New ${label.toLowerCase()}`}
+                        className="h-10 flex-1"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            save(field.onChange);
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="md"
+                        className="h-10 shrink-0"
+                        disabled={saving || !draft.trim()}
+                        onClick={() => save(field.onChange)}
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="mt-2 flex justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="md"
+                        className="h-8 px-2.5 text-xs"
+                        onClick={cancel}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       )}
     />

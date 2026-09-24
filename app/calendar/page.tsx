@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 export default async function CalendarPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Auth check in parallel with the reads; RLS scopes rows to auth.uid().
   const [userRes, tasksRes, jobsRes, hackathonsRes, tracksRes, trackItemsRes, feedbackRes] =

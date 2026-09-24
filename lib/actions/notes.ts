@@ -20,7 +20,7 @@ export async function saveNote(
   values: Record<string, unknown>,
   id?: string
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -48,7 +48,7 @@ export async function saveNote(
 }
 
 export async function deleteNote(id: string): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("notes").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/");
@@ -60,7 +60,7 @@ export async function setNotePrivacy(
   id: string,
   isPrivate: boolean
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("notes")
     .update({ private: isPrivate })

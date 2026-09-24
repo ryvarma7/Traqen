@@ -10,7 +10,7 @@ export default async function TrackDetailPage({
 }: {
   params: { id: string };
 }) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // RLS guarantees these rows belong to the signed-in user.
   const [userRes, trackRes, phasesRes, itemsRes] = await Promise.all([

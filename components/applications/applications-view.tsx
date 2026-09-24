@@ -147,7 +147,7 @@ export function ApplicationsView({
     <div>
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         {/* Segmented control */}
-        <div className="inline-flex w-fit rounded-field border border-border bg-muted/50 p-1">
+        <div className="flex rounded-field border border-border bg-muted/50 p-1 md:w-fit md:inline-flex">
           {(["jobs", "hackathons"] as Tab[]).map((t) => (
             <button
               key={t}
@@ -157,7 +157,7 @@ export function ApplicationsView({
                 setStatusFilter("All");
               }}
               className={cn(
-                "relative rounded-[7px] px-4 py-1.5 text-sm font-medium capitalize transition-colors",
+                "relative flex-1 rounded-[7px] px-4 py-2 text-sm font-medium capitalize transition-colors md:flex-none md:py-1.5",
                 tab === t ? "text-foreground" : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -396,7 +396,7 @@ export function ApplicationsView({
         type="button"
         aria-label={`Add ${noun}`}
         onClick={() => setSheet({ open: true, editing: null })}
-        className="glass-btn-base glass-btn-primary fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full shadow-lg"
+        className="glass-btn-base glass-btn-primary fixed fab-bottom fab-right z-40 flex h-14 w-14 items-center justify-center rounded-full shadow-lg"
       >
         <Plus className="h-6 w-6" />
       </motion.button>

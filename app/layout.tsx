@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Toaster } from "sonner";
 import { Raleway } from "next/font/google";
 import ServiceWorkerRegister from "@/components/service-worker";
@@ -30,6 +30,12 @@ export const metadata: Metadata = {
     ],
     shortcut: "/icon-192.png",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

@@ -207,4 +207,20 @@ body:has(.app-scene)::after {
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+
+  /* Safe-area-aware FAB positioning */
+  .fab-bottom {
+    bottom: max(3.25rem, calc(env(safe-area-inset-bottom) + 2rem));
+  }
+  .fab-right {
+    right: max(1.25rem, env(safe-area-inset-right));
+  }
+
+  /* Safe-area bottom padding for sheets/modals */
+  .pb-safe {
+    padding-bottom: max(2rem, env(safe-area-inset-bottom));
+  }
+  .pb-safe-sm {
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+  }
 }

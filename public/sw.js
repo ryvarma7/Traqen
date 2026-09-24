@@ -5,7 +5,7 @@ const CACHE_NAME = "traqen-shell-v1";
 
 self.addEventListener("install", (event) => {
   // Precache nothing specific; pages get cached on first visit (see fetch).
-  self.skipWaiting();
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("activate", (event) => {

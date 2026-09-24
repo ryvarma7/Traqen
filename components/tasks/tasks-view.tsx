@@ -178,7 +178,7 @@ export function TasksView({
                                     whileTap={{ scale: 0.97 }}
                                     type="button"
                                     onClick={() => moveTask(task, s)}
-                                    className="glass-btn-base glass-btn-outline h-8 rounded-full px-3 text-2xs font-medium text-muted-foreground"
+                                  className="glass-btn-base glass-btn-outline min-h-[2.25rem] h-auto rounded-full px-3 text-2xs font-medium text-muted-foreground"
                                   >
                                     → {s}
                                   </motion.button>
@@ -209,7 +209,7 @@ export function TasksView({
         type="button"
         aria-label="Add task"
         onClick={() => setSheet({ open: true, editing: null, preset: "To do" })}
-        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full glass-btn-base glass-btn-primary shadow-lg"
+        className="fixed fab-bottom fab-right z-40 flex h-14 w-14 items-center justify-center rounded-full glass-btn-base glass-btn-primary shadow-lg"
       >
         <Plus className="h-6 w-6" />
       </motion.button>

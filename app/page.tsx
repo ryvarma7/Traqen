@@ -12,7 +12,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function HubPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Auth check runs in parallel with the reads — the queries don't need
   // user.id because RLS already scopes every table to auth.uid().

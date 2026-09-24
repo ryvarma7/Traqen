@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 export default async function ApplicationsPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Auth check runs in parallel with the reads; RLS scopes rows to auth.uid().
   const [userRes, jobsRes, hackathonsRes, optionsRes] = await Promise.all([

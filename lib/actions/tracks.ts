@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { resolveOffset, type ParsedTrack } from "@/lib/tracks/contract";
+import { resolveOffset, trackSchema, type ParsedTrack } from "@/lib/tracks/contract";
 
 type ActionResult = { error?: string };
 
@@ -15,7 +15,7 @@ export async function importTrack(
   track: ParsedTrack,
   startDate: string
 ): Promise<ActionResult & { trackId?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -24,6 +24,13 @@ export async function importTrack(
   if (!isoDate.safeParse(startDate).success) {
     return { error: "Pick a valid start date." };
   }
+
+  // Server actions are public endpoints; never trust the client-side parser.
+  const parsedTrack = trackSchema.safeParse(track);
+  if (!parsedTrack.success) {
+    return { error: "The track contains invalid or unsafe content." };
+  }
+  track = parsedTrack.data;
 
   const { data: inserted, error: trackError } = await supabase
     .from("learning_tracks")
@@ -96,7 +103,7 @@ export async function setTrackItemStatus(
   id: string,
   status: "To do" | "In progress" | "Done"
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { error } = await supabase
     .from("track_items")
@@ -144,7 +151,7 @@ export async function cycleTrackItemStatus(
 }
 
 export async function deleteTrack(id: string): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   // Phases and items cascade via on delete cascade.
   const { error } = await supabase.from("learning_tracks").delete().eq("id", id);
   if (error) return { error: error.message };
@@ -157,7 +164,7 @@ export async function setTrackStatus(
   id: string,
   status: "In progress" | "Completed" | "On hold"
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("learning_tracks")
     .update({ status, updated_at: new Date().toISOString() })

@@ -26,14 +26,14 @@ export function AttentionStrip({ items }: { items: AttentionItem[] }) {
         />
         Needs attention
       </h2>
-      <div className="no-scrollbar -mx-4 flex gap-2.5 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:px-0">
+      <div className="no-scrollbar -mx-4 flex gap-2.5 overflow-x-auto px-4 md:mx-0 md:grid md:grid-cols-2 md:overflow-x-visible md:px-0 lg:grid-cols-3">
         {items.map((item, i) => (
           <motion.div
             key={`${item.id}-${item.date}`}
             initial={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
             animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
             transition={{ duration: 0.25, delay: i * 0.04, ease: "easeOut" }}
-            className="md:flex-1 md:min-w-0"
+            className="shrink-0 md:shrink md:min-w-0"
           >
             <Link
               href={item.href}

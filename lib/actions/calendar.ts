@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 
 /** One-time "should we add Google Calendar integration?" answer from the
@@ -10,7 +11,13 @@ export async function saveCalendarFeedback(
   answer: "yes" | "no",
   suggestion: string
 ) {
-  const supabase = createClient();
+  const parsed = z.object({
+    answer: z.enum(["yes", "no"]),
+    suggestion: z.string().max(2000),
+  }).safeParse({ answer, suggestion });
+  if (!parsed.success) return { error: "Please check your feedback." };
+
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -19,8 +26,8 @@ export async function saveCalendarFeedback(
   const { error } = await supabase.from("calendar_feedback").upsert(
     {
       user_id: user.id,
-      answer,
-      suggestion: suggestion.trim() || null,
+      answer: parsed.data.answer,
+      suggestion: parsed.data.suggestion.trim() || null,
     },
     { onConflict: "user_id" }
   );

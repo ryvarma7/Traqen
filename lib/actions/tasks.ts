@@ -22,7 +22,7 @@ export async function saveTask(
   values: Record<string, unknown>,
   id?: string
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -72,7 +72,7 @@ export async function saveTask(
 }
 
 export async function deleteTask(id: string): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("tasks").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/");
@@ -84,7 +84,7 @@ export async function setTaskStatus(
   id: string,
   status: "To do" | "In progress" | "Done"
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("tasks")
     .update({ status, updated_at: new Date().toISOString() })
@@ -100,7 +100,7 @@ export async function saveTaskNotes(
   id: string,
   notes: string
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

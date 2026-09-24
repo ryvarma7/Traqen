@@ -28,7 +28,14 @@ const optionalDate = () =>
 const optionalUrl = () =>
   z.preprocess(
     (value) => (value === "" ? undefined : value),
-    z.string().url().optional()
+    z.string().url().refine((value) => {
+      try {
+        const protocol = new URL(value).protocol;
+        return protocol === "https:" || protocol === "http:";
+      } catch {
+        return false;
+      }
+    }, "Enter an http(s) URL").optional()
   );
 
 const jobSchema = z.object({
@@ -73,7 +80,7 @@ export async function saveJobApplication(
   values: Record<string, unknown>,
   id?: string
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -95,7 +102,7 @@ export async function saveJobApplication(
 }
 
 export async function deleteJobApplication(id: string): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("job_applications").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/");
@@ -107,7 +114,7 @@ export async function saveHackathon(
   values: Record<string, unknown>,
   id?: string
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -129,7 +136,7 @@ export async function saveHackathon(
 }
 
 export async function deleteHackathon(id: string): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("hackathons").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/");
@@ -143,7 +150,7 @@ export async function saveJobApplicationNotes(
   id: string,
   notes: string
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -166,7 +173,7 @@ export async function saveHackathonNotes(
   id: string,
   notes: string
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -191,7 +198,7 @@ export async function addDropdownOption(
   fieldName: string,
   value: string
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

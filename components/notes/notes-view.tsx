@@ -14,6 +14,7 @@ import { relativeTime } from "@/lib/dates";
 import { useIsMobile } from "@/lib/hooks";
 import type { Note } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { ModalShell } from "@/components/shared/modal-shell";
 
 const listVariants: Variants = {
   hidden: {},
@@ -227,170 +228,141 @@ export function NotesView({ notes }: { notes: Note[] }) {
         type="button"
         aria-label="Add note"
         onClick={openNew}
-        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full glass-btn-base glass-btn-primary shadow-lg"
+        className="fixed fab-bottom fab-right z-40 flex h-14 w-14 items-center justify-center rounded-full glass-btn-base glass-btn-primary shadow-lg"
       >
         <Plus className="h-6 w-6" />
       </motion.button>
 
       {/* Full view on mobile, centered on desktop — same view turns editable */}
-      <AnimatePresence>
-        {overlayOpen && (
-          <div className="fixed inset-0 z-50">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="absolute inset-0 bg-black/60"
-              onClick={close}
+      <ModalShell open={overlayOpen} onClose={close} variant={isMobile ? "sheet" : "centered"}>
+        <div className="flex shrink-0 items-center justify-between border-b border-border bg-muted/60 px-5 py-3.5">
+          {editing || creating ? (
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Note title"
+              className="mr-2 h-9 border-transparent bg-transparent px-0 text-base font-semibold focus:border-transparent focus:ring-0"
+              autoFocus
             />
-            <motion.div
-              initial={isMobile ? { y: "100%" } : { opacity: 0, scale: 0.96, x: "-50%", y: "-50%" }}
-              animate={isMobile ? { y: 0 } : { opacity: 1, scale: 1, x: "-50%", y: "-50%" }}
-              exit={isMobile ? { y: "100%" } : { opacity: 0, scale: 0.96, x: "-50%", y: "-50%" }}
-              transition={
-                isMobile
-                  ? { type: "spring", stiffness: 380, damping: 34 }
-                  : { duration: 0.18, ease: "easeOut" }
-              }
-              className={cn(
-                "absolute flex flex-col glass-modal overflow-hidden",
-                isMobile
-                  ? "inset-0 rounded-t-card"
-                  : "left-1/2 top-1/2 max-h-[85vh] w-full max-w-xl rounded-card"
+          ) : (
+            <h2 className="flex min-w-0 items-center gap-2 text-base font-semibold tracking-tight text-foreground">
+              {viewing && viewing.color !== "gray" && (
+                <ColorDot color={viewing.color} />
               )}
-            >
-              <div className="flex shrink-0 items-center justify-between border-b border-border bg-muted/60 px-5 py-3.5">
-                {editing || creating ? (
-                  <Input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Note title"
-                    className="mr-2 h-9 border-transparent bg-transparent px-0 text-base font-semibold focus:border-transparent focus:ring-0"
-                    autoFocus
+              <span className="truncate">{viewing?.title}</span>
+            </h2>
+          )}
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            type="button"
+            onClick={close}
+            aria-label="Close"
+            className="glass-btn-base glass-btn-ghost flex h-8 w-8 shrink-0 items-center justify-center rounded-field text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </motion.button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 md:px-6">
+          {editing || creating ? (
+            <div className="space-y-4">
+              <Textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                rows={10}
+                placeholder="Start writing…"
+                className="resize-none glass-input"
+              />
+              <div className="flex items-center gap-2">
+                <Label className="mr-1">Color</Label>
+                {Object.keys(NOTE_COLORS).map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    aria-label={`Color ${c}`}
+                    onClick={() => setColor(c)}
+                    className={cn(
+                      "flex h-7 w-7 items-center justify-center rounded-full transition-transform hover:scale-110",
+                      color === c && "ring-2 ring-accent ring-offset-2 ring-offset-surface"
+                    )}
+                  >
+                    <ColorDot color={c} className="h-3.5 w-3.5" />
+                  </button>
+                ))}
+                <label className="ml-auto flex min-h-11 items-center gap-1.5 text-xs font-medium text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={pinned}
+                    onChange={(e) => setPinned(e.target.checked)}
+                    className="h-4 w-4 accent-accent rounded"
                   />
-                ) : (
-                  <h2 className="flex min-w-0 items-center gap-2 text-base font-semibold tracking-tight text-foreground">
-                    {viewing && viewing.color !== "gray" && (
-                      <ColorDot color={viewing.color} />
-                    )}
-                    <span className="truncate">{viewing?.title}</span>
-                  </h2>
-                )}
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  type="button"
-                  onClick={close}
-                  aria-label="Close"
-                  className="glass-btn-base glass-btn-ghost flex h-8 w-8 shrink-0 items-center justify-center rounded-field text-muted-foreground hover:text-foreground"
+                  Pin
+                </label>
+              </div>
+            </div>
+          ) : (
+            <>
+              {viewing?.content ? (
+                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+                  {viewing.content}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">Empty note.</p>
+              )}
+              <p className="mt-6 text-2xs text-muted-foreground">
+                Edited {relativeTime(viewing?.updated_at ?? new Date().toISOString())}
+              </p>
+            </>
+          )}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2 border-t border-border bg-muted/60 px-5 pb-safe pt-3.5 md:pb-3.5">
+          {editing || creating ? (
+            <>
+              <Button size="lg" className="flex-1" disabled={busy} onClick={save}>
+                {busy ? "Saving…" : creating ? "Add note" : "Save"}
+              </Button>
+              <Button size="lg" variant="outline" onClick={close}>
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button size="lg" variant="outline" className="flex-1" onClick={startEditing}>
+                <Pencil className="h-4 w-4" /> Edit
+              </Button>
+              {viewing?.content && (
+                <Button
+                  size="lg"
+                  variant="ghost"
+                  aria-label={
+                    isHidden(viewing)
+                      ? "Show preview on notes page"
+                      : "Hide preview on notes page"
+                  }
+                  title={isHidden(viewing) ? "Show preview" : "Hide preview"}
+                  onClick={() => togglePrivacy(viewing)}
                 >
-                  <X className="h-4 w-4" />
-                </motion.button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto px-5 py-4 md:px-6">
-                {editing || creating ? (
-                  <div className="space-y-4">
-                    <Textarea
-                      value={content}
-                      onChange={(e) => setContent(e.target.value)}
-                      rows={10}
-                      placeholder="Start writing…"
-                      className="resize-none glass-input"
-                    />
-                    <div className="flex items-center gap-2">
-                      <Label className="mr-1">Color</Label>
-                      {Object.keys(NOTE_COLORS).map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          aria-label={`Color ${c}`}
-                          onClick={() => setColor(c)}
-                          className={cn(
-                            "flex h-7 w-7 items-center justify-center rounded-full transition-transform hover:scale-110",
-                            color === c && "ring-2 ring-accent ring-offset-2 ring-offset-surface"
-                          )}
-                        >
-                          <ColorDot color={c} className="h-3.5 w-3.5" />
-                        </button>
-                      ))}
-                      <label className="ml-auto flex min-h-11 items-center gap-1.5 text-xs font-medium text-muted-foreground cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={pinned}
-                          onChange={(e) => setPinned(e.target.checked)}
-                          className="h-4 w-4 accent-accent rounded"
-                        />
-                        Pin
-                      </label>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {viewing?.content ? (
-                      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
-                        {viewing.content}
-                      </p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Empty note.</p>
-                    )}
-                    <p className="mt-6 text-2xs text-muted-foreground">
-                      Edited {relativeTime(viewing?.updated_at ?? new Date().toISOString())}
-                    </p>
-                  </>
-                )}
-              </div>
-
-              <div className="flex shrink-0 items-center gap-2 border-t border-border bg-muted/60 px-5 py-3.5">
-                {editing || creating ? (
-                  <>
-                    <Button size="lg" className="flex-1" disabled={busy} onClick={save}>
-                      {busy ? "Saving…" : creating ? "Add note" : "Save"}
-                    </Button>
-                    <Button size="lg" variant="outline" onClick={close}>
-                      Cancel
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button size="lg" variant="outline" className="flex-1" onClick={startEditing}>
-                      <Pencil className="h-4 w-4" /> Edit
-                    </Button>
-                    {viewing?.content && (
-                      <Button
-                        size="lg"
-                        variant="ghost"
-                        aria-label={
-                          isHidden(viewing)
-                            ? "Show preview on notes page"
-                            : "Hide preview on notes page"
-                        }
-                        title={isHidden(viewing) ? "Show preview" : "Hide preview"}
-                        onClick={() => togglePrivacy(viewing)}
-                      >
-                        {isHidden(viewing) ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
-                    )}
-                    <Button
-                      size="lg"
-                      variant="ghost"
-                      className="text-danger hover:bg-danger-soft hover:text-danger"
-                      onClick={remove}
-                      disabled={busy}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </>
-                )}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+                  {isHidden(viewing) ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
+              <Button
+                size="lg"
+                variant="ghost"
+                className="text-danger hover:bg-danger-soft hover:text-danger"
+                onClick={remove}
+                disabled={busy}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+        </div>
+      </ModalShell>
     </div>
   );
 }

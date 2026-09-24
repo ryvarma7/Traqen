@@ -1,11 +1,12 @@
 -- Traqen database schema
--- Run this entire block once in Supabase → SQL Editor.
+-- Safe to run on a new or existing Supabase project. Existing tables and
+-- policies are preserved; missing columns/policies are added below.
 -- Related dashboard setting: Authentication → Providers → Email → turn OFF "Confirm email".
 
 create extension if not exists "uuid-ossp";
 
 -- Profiles: maps a chosen username to the real auth user
-create table public.profiles (
+create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   username text unique not null,
   email_internal text not null,
@@ -18,14 +19,17 @@ create table public.profiles (
 
 alter table public.profiles enable row level security;
 
+drop policy if exists "Users can view own profile" on public.profiles;
 create policy "Users can view own profile"
   on public.profiles for select
   using (auth.uid() = id);
 
+drop policy if exists "Users can insert own profile" on public.profiles;
 create policy "Users can insert own profile"
   on public.profiles for insert
   with check (auth.uid() = id);
 
+drop policy if exists "Users can update own profile" on public.profiles;
 create policy "Users can update own profile"
   on public.profiles for update
   using (auth.uid() = id);
@@ -41,7 +45,9 @@ as $$
   select email_internal from public.profiles where username = lower(uname) limit 1;
 $$;
 
-grant execute on function public.get_email_for_username(text) to anon, authenticated;
+-- Google OAuth is the only sign-in method. Do not expose this legacy lookup:
+-- it would allow anonymous username-to-email enumeration.
+revoke all on function public.get_email_for_username(text) from public, anon, authenticated;
 
 -- First Google sign-in: create the profiles row if it doesn't exist yet.
 -- Username is derived from the Google account's email local part and made
@@ -98,9 +104,10 @@ end;
 $$;
 
 grant execute on function public.ensure_profile() to authenticated;
+revoke all on function public.ensure_profile() from public, anon;
 
 -- Extensible per-user dropdown options ("+ Add new")
-create table public.dropdown_options (
+create table if not exists public.dropdown_options (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references auth.users(id) on delete cascade not null,
   section text not null check (section in ('jobs','hackathons')),
@@ -111,13 +118,14 @@ create table public.dropdown_options (
 );
 
 alter table public.dropdown_options enable row level security;
+drop policy if exists "Users manage own dropdown options" on public.dropdown_options;
 create policy "Users manage own dropdown options"
   on public.dropdown_options for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
 -- Job applications
-create table public.job_applications (
+create table if not exists public.job_applications (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references auth.users(id) on delete cascade not null,
   company text not null,
@@ -142,13 +150,14 @@ create table public.job_applications (
 );
 
 alter table public.job_applications enable row level security;
+drop policy if exists "Users manage own job applications" on public.job_applications;
 create policy "Users manage own job applications"
   on public.job_applications for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
 -- Hackathons / buildathons / competitions
-create table public.hackathons (
+create table if not exists public.hackathons (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references auth.users(id) on delete cascade not null,
   hackathon_name text not null,
@@ -180,13 +189,14 @@ create table public.hackathons (
 );
 
 alter table public.hackathons enable row level security;
+drop policy if exists "Users manage own hackathons" on public.hackathons;
 create policy "Users manage own hackathons"
   on public.hackathons for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
 -- Tasks (optionally linked to a job application or a hackathon)
-create table public.tasks (
+create table if not exists public.tasks (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references auth.users(id) on delete cascade not null,
   title text not null,
@@ -203,13 +213,14 @@ create table public.tasks (
 );
 
 alter table public.tasks enable row level security;
+drop policy if exists "Users manage own tasks" on public.tasks;
 create policy "Users manage own tasks"
   on public.tasks for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
 -- Notes
-create table public.notes (
+create table if not exists public.notes (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references auth.users(id) on delete cascade not null,
   title text not null,
@@ -222,6 +233,7 @@ create table public.notes (
 );
 
 alter table public.notes enable row level security;
+drop policy if exists "Users manage own notes" on public.notes;
 create policy "Users manage own notes"
   on public.notes for all
   using (auth.uid() = user_id)
@@ -246,7 +258,7 @@ alter table public.notes add column if not exists private boolean default false;
 -- AI plans a course externally; the user pastes the JSON plan and Traqen
 -- normalizes it into tracks → phases → items rows for visual tracking.
 -- ---------------------------------------------------------------------------
-create table public.learning_tracks (
+create table if not exists public.learning_tracks (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references auth.users(id) on delete cascade not null,
   title text not null,
@@ -258,12 +270,13 @@ create table public.learning_tracks (
 );
 
 alter table public.learning_tracks enable row level security;
+drop policy if exists "Users manage own learning tracks" on public.learning_tracks;
 create policy "Users manage own learning tracks"
   on public.learning_tracks for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
-create table public.track_phases (
+create table if not exists public.track_phases (
   id uuid primary key default uuid_generate_v4(),
   track_id uuid references public.learning_tracks(id) on delete cascade not null,
   user_id uuid references auth.users(id) on delete cascade not null,
@@ -273,12 +286,13 @@ create table public.track_phases (
 );
 
 alter table public.track_phases enable row level security;
+drop policy if exists "Users manage own track phases" on public.track_phases;
 create policy "Users manage own track phases"
   on public.track_phases for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
-create table public.track_items (
+create table if not exists public.track_items (
   id uuid primary key default uuid_generate_v4(),
   track_id uuid references public.learning_tracks(id) on delete cascade not null,
   phase_id uuid references public.track_phases(id) on delete cascade not null,
@@ -294,6 +308,7 @@ create table public.track_items (
 );
 
 alter table public.track_items enable row level security;
+drop policy if exists "Users manage own track items" on public.track_items;
 create policy "Users manage own track items"
   on public.track_items for all
   using (auth.uid() = user_id)
@@ -309,7 +324,7 @@ create index if not exists idx_learning_tracks_user_id on public.learning_tracks
 -- /calendar. One row per user; the answer + optional suggestion text are
 -- stored server-side so it never reappears on another device.
 -- ---------------------------------------------------------------------------
-create table public.calendar_feedback (
+create table if not exists public.calendar_feedback (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references auth.users(id) on delete cascade not null unique,
   answer text not null check (answer in ('yes','no')),
@@ -318,6 +333,7 @@ create table public.calendar_feedback (
 );
 
 alter table public.calendar_feedback enable row level security;
+drop policy if exists "Users manage own calendar feedback" on public.calendar_feedback;
 create policy "Users manage own calendar feedback"
   on public.calendar_feedback for all
   using (auth.uid() = user_id)
@@ -328,8 +344,8 @@ create policy "Users manage own calendar feedback"
 -- requires table-level GRANTs — without them every query fails with 403
 -- "permission denied" even when the policies pass, and the signup profile
 -- insert fails so new users can never log in.
--- Nothing is granted to anon: unauthenticated access goes only through the
--- get_email_for_username RPC above.
+-- Nothing is granted to anon. Google OAuth does not need an unauthenticated
+-- email lookup RPC.
 -- ---------------------------------------------------------------------------
 grant select, insert, update, delete on public.profiles to authenticated;
 grant select, insert, update, delete on public.dropdown_options to authenticated;

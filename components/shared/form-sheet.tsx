@@ -1,14 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useIsMobile } from "@/lib/hooks";
+import { ModalShell } from "@/components/shared/modal-shell";
 
-const spring = { type: "spring", stiffness: 380, damping: 34 } as const;
-
-/** Bottom sheet on mobile (spring slide-up), centered modal on desktop
- *  (blur-in + scale) with Framer glass styling. */
+/** Bottom sheet on mobile, centered modal on desktop with portal-based positioning */
 export function FormSheet({
   open,
   onClose,
@@ -26,56 +24,14 @@ export function FormSheet({
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   return (
-    <AnimatePresence>
-      {open && (
-        <div className="fixed inset-0 z-50">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={onClose}
-          />
-
-          {isMobile ? (
-            <motion.div
-              key="sheet"
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={spring}
-              className="absolute inset-x-0 bottom-0 flex max-h-[92dvh] flex-col rounded-t-card glass-modal overflow-hidden"
-            >
-              <SheetHeader title={title} onClose={onClose} />
-              <div className="overflow-y-auto px-5 pb-8 pt-4">{children}</div>
-            </motion.div>
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center p-6">
-              <motion.div
-                key="modal"
-                initial={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
-                animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
-                exit={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
-                transition={{ duration: 0.25, ease: "easeOut" }}
-                className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-card glass-modal overflow-hidden"
-              >
-                <SheetHeader title={title} onClose={onClose} />
-                <div className="overflow-y-auto px-6 pb-6 pt-4">{children}</div>
-              </motion.div>
-            </div>
-          )}
-        </div>
-      )}
-    </AnimatePresence>
+    <ModalShell open={open} onClose={onClose} variant={isMobile ? "sheet" : "centered"}>
+      <SheetHeader title={title} onClose={onClose} />
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-safe pt-4 md:px-6 md:pb-6">{children}</div>
+    </ModalShell>
   );
 }
 

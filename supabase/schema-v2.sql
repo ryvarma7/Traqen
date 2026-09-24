@@ -45,10 +45,9 @@ alter table public.job_applications add column if not exists next_action text;
 alter table public.hackathons add column if not exists team_status text;
 alter table public.hackathons add column if not exists submission_link text;
 
--- The username→email RPC was only needed for password login. Google OAuth
--- signs users in directly, so it can be retired. Kept commented out in case
--- you ever want to re-add password login — uncomment to drop it for real.
--- drop function if exists public.get_email_for_username(text);
+-- The username→email RPC was only needed for password login. Retire it so an
+-- old database cannot expose internal email addresses through an RPC.
+drop function if exists public.get_email_for_username(text);
 
 -- First Google sign-in: create the profiles row if it doesn't exist yet.
 -- Username is derived from the Google account's email local part and made
@@ -105,3 +104,4 @@ end;
 $$;
 
 grant execute on function public.ensure_profile() to authenticated;
+revoke all on function public.ensure_profile() from public, anon;

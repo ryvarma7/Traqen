@@ -82,12 +82,22 @@ const isoDate = z
 const itemSchema = z.object({
   title: z.string().trim().min(1).max(500),
   description: z.string().max(5000).optional().nullable(),
-  // Lenient: accept any non-empty string; the UI renders it as a link.
+  // Only web URLs are persisted and rendered as anchors. This is important
+  // because the import payload is supplied by an external AI/user.
   resource_url: z
     .string()
     .max(2000)
     .optional()
     .nullable()
+    .refine((value) => {
+      if (!value || value.trim() === "-") return true;
+      try {
+        const url = new URL(value.trim());
+        return url.protocol === "https:" || url.protocol === "http:";
+      } catch {
+        return false;
+      }
+    }, "Expected an http(s) URL")
     .transform((v) => (v && v.trim() && v.trim() !== "-" ? v.trim() : null)),
   absolute_date: isoDate.optional().nullable(),
   offset_days: z.number().int().min(0).max(3650).optional().nullable(),
@@ -102,7 +112,7 @@ const phaseSchema = z.object({
 export const trackSchema = z.object({
   track_title: z.string().trim().min(1).max(500),
   description: z.string().max(5000).optional().nullable(),
-  phases: z.array(phaseSchema).min(1),
+  phases: z.array(phaseSchema).min(1).max(24),
 });
 
 export type ParsedTrack = z.infer<typeof trackSchema>;

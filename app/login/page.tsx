@@ -12,13 +12,18 @@ import { logInWithGoogle } from "@/lib/actions/auth";
 function LoginContent() {
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
+  const [actionError, setActionError] = React.useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setActionError(null);
+    setIsSubmitting(true);
     const result = await logInWithGoogle();
-    // signInWithOAuth only fails when the Supabase provider is
-    // misconfigured; success redirects and never reaches here.
-    if (result?.error) window.location.reload();
+    if (result?.error) {
+      setActionError(result.error);
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -30,15 +35,17 @@ function LoginContent() {
         onSubmit={onSubmit}
         noValidate
       >
-        <FormError message={error} />
+        <FormError message={actionError || error} />
 
         <Button
           type="submit"
           size="lg"
+          disabled={isSubmitting}
+          aria-busy={isSubmitting}
           className="auth-btn-primary w-full focus-visible:ring-white/30"
         >
           <GoogleIcon className="h-4 w-4" />
-          Continue with Google
+          {isSubmitting ? "Opening Google…" : "Continue with Google"}
         </Button>
       </motion.form>
 
