@@ -46,13 +46,13 @@ export function ModalShell({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-0 bg-black/70"
             onClick={onClose}
           />
 
           <div
             className={cn(
-              "flex min-h-full",
+              "relative z-10 flex min-h-full",
               variant === "sheet"
                 ? "items-end justify-center p-0 pb-[env(safe-area-inset-bottom)]"
                 : "items-center justify-center p-4 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
@@ -76,7 +76,7 @@ export function ModalShell({
               }
               transition={variant === "sheet" ? spring : { duration: 0.25, ease: "easeOut" }}
               className={cn(
-                "max-h-[90dvh] flex flex-col overflow-hidden glass-modal",
+                "relative z-10 max-h-[90dvh] flex flex-col overflow-hidden glass-modal",
                 variant === "sheet"
                   ? "w-full max-w-lg rounded-t-card rounded-b-none"
                   : "w-full max-w-lg rounded-card",

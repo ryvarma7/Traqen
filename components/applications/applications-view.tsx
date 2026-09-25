@@ -142,35 +142,40 @@ export function ApplicationsView({
 
   const EmptyIcon = tab === "jobs" ? Briefcase : Trophy;
   const noun = tab === "jobs" ? "job application" : "hackathon";
+  const tabs = ["jobs", "hackathons"] as const;
 
   return (
     <div>
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        {/* Segmented control */}
-        <div className="flex rounded-field border border-border bg-muted/50 p-1 md:w-fit md:inline-flex">
-          {(["jobs", "hackathons"] as Tab[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => {
-                setTab(t);
-                setStatusFilter("All");
-              }}
-              className={cn(
-                "relative flex-1 rounded-[7px] px-4 py-2 text-sm font-medium capitalize transition-colors md:flex-none md:py-1.5",
-                tab === t ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {tab === t && (
-                <motion.span
-                  layoutId="tab-pill"
-                  className="absolute inset-0 rounded-[7px] glass-tile"
-                  transition={{ type: "spring", stiffness: 420, damping: 36 }}
-                />
-              )}
-              <span className="relative z-10">{t}</span>
-            </button>
-          ))}
+        <div className="relative inline-flex w-full rounded-field border border-border bg-muted/60 p-1 md:w-fit">
+          <motion.div
+            layout
+            transition={{ type: "spring", stiffness: 420, damping: 30 }}
+            className={cn(
+              "absolute inset-y-1 rounded-[7px] border border-white/10 bg-white/[0.06] shadow-[0_0_0_1px_rgba(255,255,255,0.02)]",
+              tab === "jobs" ? "left-1 w-[calc(50%-4px)]" : "left-[calc(50%+3px)] w-[calc(50%-4px)]"
+            )}
+          />
+
+          {tabs.map((t) => {
+            const isActive = tab === t;
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => {
+                  setTab(t);
+                  setStatusFilter("All");
+                }}
+                className={cn(
+                  "relative z-10 flex-1 rounded-[7px] px-4 py-2 text-sm font-medium capitalize transition-colors md:flex-none md:min-w-[120px] md:py-1.5",
+                  isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {t}
+              </button>
+            );
+          })}
         </div>
 
         <div className="w-full md:w-44">
