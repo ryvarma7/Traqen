@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { haptics } from "@/lib/haptics";
 
 const ADD_NEW = "__add_new__";
 
@@ -45,6 +46,7 @@ export function ExtensibleSelect<T extends FieldValues>({
             id={name}
             value={adding ? ADD_NEW : field.value ?? ""}
             onChange={async (e) => {
+              haptics.selection();
               if (e.target.value === ADD_NEW) {
                 setAdding(true);
                 requestAnimationFrame(() =>
@@ -128,9 +130,11 @@ export function ExtensibleSelect<T extends FieldValues>({
     const result = await onAddOption(value);
     setSaving(false);
     if (result?.error) {
+      haptics.error();
       toast.error(result.error);
       return;
     }
+    haptics.success();
     toast.success("Option added");
     onChange(value);
     setAdding(false);

@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { deleteTask, saveTask } from "@/lib/actions/tasks";
+import { haptics } from "@/lib/haptics";
 import { PRIORITIES, TASK_STATUSES, type Task } from "@/lib/types";
 
 const schema = z.object({
@@ -72,9 +73,11 @@ export function TaskForm({
     setError(null);
     const result = await saveTask(data, item?.id);
     if (result.error) {
+      haptics.error();
       setError(result.error);
       return;
     }
+    haptics.success();
     toast.success(item ? "Task updated" : "Task added");
     onClose();
   };
@@ -83,9 +86,11 @@ export function TaskForm({
     if (!item) return;
     const result = await deleteTask(item.id);
     if (result.error) {
+      haptics.error();
       toast.error(result.error);
       return;
     }
+    haptics.delete();
     toast.success("Task deleted");
     onClose();
   };

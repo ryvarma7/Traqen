@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { ImportTrackModal } from "@/components/tracks/import-track-modal";
 import { deleteTrack } from "@/lib/actions/tracks";
 import { formatShortDate } from "@/lib/dates";
+import { haptics } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
 const listVariants: Variants = {
@@ -48,12 +49,17 @@ export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
   const remove = async (id: string, title: string) => {
     if (!window.confirm(`Delete "${title}" and all its steps? This can't be undone.`)) return;
     const result = await deleteTrack(id);
-    if (result.error) toast.error(result.error);
-    else toast.success("Track deleted");
+    if (result.error) {
+      haptics.error();
+      toast.error(result.error);
+    } else {
+      haptics.delete();
+      toast.success("Track deleted");
+    }
   };
 
   return (
-    <div>
+    <div className="relative pb-24 md:pb-28">
       {tracks.length === 0 ? (
         <div className="flex flex-col items-center rounded-card glass-section border-dashed px-6 py-16 text-center">
           <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-card bg-white/6 border border-white/12">
@@ -161,7 +167,7 @@ export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
         type="button"
         aria-label="Import track"
         onClick={() => setImportOpen(true)}
-        className="fixed fab-bottom fab-right z-40 flex h-14 w-14 items-center justify-center rounded-full glass-btn-base glass-btn-primary shadow-lg"
+        className="fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full glass-btn-base glass-btn-primary shadow-lg md:bottom-6 md:right-6"
       >
         <Plus className="h-6 w-6" />
       </motion.button>

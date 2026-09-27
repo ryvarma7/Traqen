@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { sourceDot, sourceLabel, type CalendarEvent } from "@/lib/calendar";
 import { dateKey } from "@/lib/calendar";
+import { haptics } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -81,7 +82,10 @@ export function CalendarView({
         <div className="flex items-center gap-1.5">
           <motion.button
             type="button"
-            onClick={() => move(-1)}
+            onClick={() => {
+              haptics.selection();
+              move(-1);
+            }}
             whileTap={{ scale: 0.97 }}
             aria-label="Previous month"
             className="glass-btn-base glass-btn-outline flex h-8 w-8 items-center justify-center rounded-field sm:h-9 sm:w-9"
@@ -91,6 +95,7 @@ export function CalendarView({
           <motion.button
             type="button"
             onClick={() => {
+              haptics.selection();
               setCursor(new Date(today.getFullYear(), today.getMonth(), 1));
               setSelectedKey(todayKey);
             }}
@@ -101,7 +106,10 @@ export function CalendarView({
           </motion.button>
           <motion.button
             type="button"
-            onClick={() => move(1)}
+            onClick={() => {
+              haptics.selection();
+              move(1);
+            }}
             whileTap={{ scale: 0.97 }}
             aria-label="Next month"
             className="glass-btn-base glass-btn-outline flex h-8 w-8 items-center justify-center rounded-field sm:h-9 sm:w-9"
@@ -140,7 +148,10 @@ export function CalendarView({
                   key={cell.key}
                   type="button"
                   aria-pressed={isSelected}
-                  onClick={() => setSelectedKey(cell.key)}
+                  onClick={() => {
+                    haptics.selection();
+                    setSelectedKey(cell.key);
+                  }}
                   className={cn(
                     "relative flex min-h-[52px] flex-col items-center border-b border-r border-border py-1.5 transition-colors last:border-r-0 sm:min-h-[60px] md:min-h-[76px] md:py-2",
                     cell.inMonth ? "" : "opacity-35",
@@ -248,6 +259,7 @@ function EventRow({ event }: { event: CalendarEvent }) {
     <motion.li layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <Link
         href={event.href}
+        onClick={() => haptics.tap()}
         className={cn(
           "glass-tile flex items-center gap-2.5 rounded-field px-3 py-2.5 transition-all hover:shadow-lift",
           event.done && "opacity-50"

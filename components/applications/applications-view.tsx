@@ -26,6 +26,7 @@ import {
 } from "@/lib/actions/applications";
 import { daysUntil } from "@/lib/dates";
 import { DEFAULT_OPTIONS, optionsForField } from "@/lib/defaults";
+import { haptics } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 import type { DropdownOption, Hackathon, JobApplication } from "@/lib/types";
 
@@ -120,6 +121,7 @@ export function ApplicationsView({
   const editingHackathon = hackathons.find((h) => h.id === sheet.editing) ?? null;
 
   const toggleSort = (key: SortKey) => {
+    haptics.selection();
     if (sortKey === key) setSortAsc((v) => !v);
     else {
       setSortKey(key);
@@ -145,7 +147,7 @@ export function ApplicationsView({
   const tabs = ["jobs", "hackathons"] as const;
 
   return (
-    <div>
+    <div className="relative pb-24 md:pb-28">
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="relative inline-flex w-full rounded-field border border-border bg-muted/60 p-1 md:w-fit">
           <motion.div
@@ -164,6 +166,7 @@ export function ApplicationsView({
                 key={t}
                 type="button"
                 onClick={() => {
+                  haptics.selection();
                   setTab(t);
                   setStatusFilter("All");
                 }}
@@ -181,7 +184,10 @@ export function ApplicationsView({
         <div className="w-full md:w-44">
           <Select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              haptics.selection();
+              setStatusFilter(e.target.value);
+            }}
             aria-label="Filter by status"
           >
             <option value="All">All statuses</option>
@@ -240,7 +246,10 @@ export function ApplicationsView({
                         <motion.tr
                           variants={itemVariants}
                           className="group cursor-pointer transition-colors"
-                          onClick={() => setExpandedId(expanded ? null : row.id)}
+                          onClick={() => {
+                            haptics.selection();
+                            setExpandedId(expanded ? null : row.id);
+                          }}
                         >
                           <td className="border-b border-border px-3.5 py-3 text-sm font-medium text-foreground group-hover:bg-muted/50">
                             {name}
@@ -278,6 +287,7 @@ export function ApplicationsView({
                                 className="glass-btn-base glass-btn-ghost rounded-field p-1.5 text-muted-foreground opacity-0 transition-all hover:text-foreground group-hover:opacity-100"
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  haptics.tap();
                                   setSheet({ open: true, editing: row.id });
                                 }}
                               >
@@ -307,7 +317,10 @@ export function ApplicationsView({
                                     whileTap={{ scale: 0.97 }}
                                     type="button"
                                     className="glass-btn-base glass-btn-outline mt-4 h-9 gap-2 rounded-field px-3.5 text-sm font-medium text-foreground"
-                                    onClick={() => setSheet({ open: true, editing: row.id })}
+                                    onClick={() => {
+                                      haptics.tap();
+                                      setSheet({ open: true, editing: row.id });
+                                    }}
                                   >
                                     <Pencil className="h-3.5 w-3.5" /> Edit full details
                                   </motion.button>
@@ -346,7 +359,10 @@ export function ApplicationsView({
                   <button
                     type="button"
                     className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left"
-                    onClick={() => setExpandedId(expanded ? null : row.id)}
+                    onClick={() => {
+                      haptics.selection();
+                      setExpandedId(expanded ? null : row.id);
+                    }}
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">{name}</p>
@@ -379,7 +395,10 @@ export function ApplicationsView({
                             whileTap={{ scale: 0.97 }}
                             type="button"
                             className="glass-btn-base glass-btn-outline flex h-10 w-full items-center justify-center gap-2 rounded-field text-sm font-medium text-foreground"
-                            onClick={() => setSheet({ open: true, editing: row.id })}
+                            onClick={() => {
+                              haptics.tap();
+                              setSheet({ open: true, editing: row.id });
+                            }}
                           >
                             <Pencil className="h-4 w-4" /> Edit
                           </motion.button>
@@ -400,8 +419,11 @@ export function ApplicationsView({
         whileHover={{ scale: 1.05 }}
         type="button"
         aria-label={`Add ${noun}`}
-        onClick={() => setSheet({ open: true, editing: null })}
-        className="glass-btn-base glass-btn-primary fixed fab-bottom fab-right z-40 flex h-14 w-14 items-center justify-center rounded-full shadow-lg"
+        onClick={() => {
+          haptics.impact();
+          setSheet({ open: true, editing: null });
+        }}
+        className="glass-btn-base glass-btn-primary fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full shadow-lg md:bottom-6 md:right-6"
       >
         <Plus className="h-6 w-6" />
       </motion.button>

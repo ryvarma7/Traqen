@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { FormSheet } from "@/components/shared/form-sheet";
 import { importTrack } from "@/lib/actions/tracks";
 import { buildPrompt, parseTrackInput, type ParsedTrack } from "@/lib/tracks/contract";
+import { haptics } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
 const spring = { type: "spring", stiffness: 400, damping: 36 } as const;
@@ -76,17 +77,25 @@ export function ImportTrackModal({
     reset();
   };
 
+  const goTo = (s: number) => {
+    haptics.selection();
+    setStep(s);
+  };
+
   const copyPrompt = async () => {
     if (!topic.trim()) {
+      haptics.error();
       toast.error("Enter what you want to learn first");
       return;
     }
     try {
       await navigator.clipboard.writeText(generatedPrompt);
+      haptics.success();
       setCopied(true);
       toast.success("Prompt copied — paste it into your AI app");
       setTimeout(() => setCopied(false), 2500);
     } catch {
+      haptics.error();
       toast.error("Couldn't copy — select the text and copy manually");
     }
   };
@@ -94,10 +103,12 @@ export function ImportTrackModal({
   const handleParse = () => {
     const result = parseTrackInput(raw);
     if (result.ok) {
+      haptics.success();
       setTrack(result.track);
       setParseError(null);
       setStep(3);
     } else {
+      haptics.error();
       setParseError(result.error);
       setTrack(null);
     }
@@ -109,9 +120,11 @@ export function ImportTrackModal({
     const result = await importTrack(track, startDate);
     setSaving(false);
     if (result.error) {
+      haptics.error();
       toast.error(result.error);
       return;
     }
+    haptics.success();
     toast.success("Track imported");
     close();
     router.push(`/tracks/${result.trackId}`);
@@ -131,7 +144,7 @@ export function ImportTrackModal({
             <button
               key={label}
               type="button"
-              onClick={() => i < step && setStep(i)}
+              onClick={() => i < step && goTo(i)}
               className={cn(
                 "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-2xs font-medium transition-colors",
                 i === step
@@ -260,7 +273,7 @@ export function ImportTrackModal({
                 <motion.button
                   whileTap={{ scale: 0.97 }}
                   type="button"
-                  onClick={() => setStep(1)}
+                  onClick={() => goTo(1)}
                   className="glass-btn-base glass-btn-outline h-10 gap-2 rounded-field px-4 text-sm"
                 >
                   Next <ArrowRight className="h-3.5 w-3.5" />
@@ -306,7 +319,7 @@ export function ImportTrackModal({
                 <motion.button
                   whileTap={{ scale: 0.97 }}
                   type="button"
-                  onClick={() => setStep(0)}
+                  onClick={() => goTo(0)}
                   className="glass-btn-base glass-btn-ghost h-10 gap-2 rounded-field px-3 text-sm text-muted-foreground"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" /> Back
@@ -314,7 +327,7 @@ export function ImportTrackModal({
                 <motion.button
                   whileTap={{ scale: 0.97 }}
                   type="button"
-                  onClick={() => setStep(2)}
+                  onClick={() => goTo(2)}
                   className="glass-btn-base glass-btn-primary h-10 gap-2 rounded-field px-4 text-sm"
                 >
                   I have the plan <ArrowRight className="h-3.5 w-3.5" />
@@ -362,7 +375,7 @@ export function ImportTrackModal({
                 <motion.button
                   whileTap={{ scale: 0.97 }}
                   type="button"
-                  onClick={() => setStep(1)}
+                  onClick={() => goTo(1)}
                   className="glass-btn-base glass-btn-ghost h-10 gap-2 rounded-field px-3 text-sm text-muted-foreground"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" /> Back
@@ -446,7 +459,7 @@ export function ImportTrackModal({
                 <motion.button
                   whileTap={{ scale: 0.97 }}
                   type="button"
-                  onClick={() => setStep(2)}
+                  onClick={() => goTo(2)}
                   className="glass-btn-base glass-btn-ghost h-10 gap-2 rounded-field px-3 text-sm text-muted-foreground"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" /> Back

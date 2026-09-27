@@ -9,6 +9,7 @@ import { CountdownPill } from "@/components/shared/countdown-pill";
 import { PriorityPill } from "@/components/shared/priority-pill";
 import { TaskForm, type LinkableItem } from "@/components/tasks/task-form";
 import { setTaskStatus } from "@/lib/actions/tasks";
+import { haptics } from "@/lib/haptics";
 import { TASK_STATUSES, type Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -53,13 +54,18 @@ export function TasksView({
 
   const moveTask = async (task: Task, status: Task["status"]) => {
     const result = await setTaskStatus(task.id, status);
-    if (result.error) toast.error(result.error);
+    if (result.error) {
+      haptics.error();
+      toast.error(result.error);
+    } else {
+      haptics.success();
+    }
   };
 
   const empty = tasks.length === 0;
 
   return (
-    <div>
+    <div className="relative pb-24 md:pb-28">
       {empty ? (
         <div className="flex flex-col items-center rounded-card glass-section border-dashed px-6 py-14 text-center">
           <p className="text-sm text-muted-foreground">
@@ -139,7 +145,10 @@ export function TasksView({
                   <button
                     type="button"
                     className="flex min-h-11 w-full items-center justify-between px-4 py-3"
-                    onClick={() => setOpenSection(isOpen ? null : status)}
+                    onClick={() => {
+                      haptics.selection();
+                      setOpenSection(isOpen ? null : status);
+                    }}
                   >
                     <span className="flex items-center gap-2 text-sm font-medium text-foreground">
                       {status}
@@ -209,7 +218,7 @@ export function TasksView({
         type="button"
         aria-label="Add task"
         onClick={() => setSheet({ open: true, editing: null, preset: "To do" })}
-        className="fixed fab-bottom fab-right z-40 flex h-14 w-14 items-center justify-center rounded-full glass-btn-base glass-btn-primary shadow-lg"
+        className="fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full glass-btn-base glass-btn-primary shadow-lg md:bottom-6 md:right-6"
       >
         <Plus className="h-6 w-6" />
       </motion.button>

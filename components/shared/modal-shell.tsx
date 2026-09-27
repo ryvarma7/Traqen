@@ -3,6 +3,7 @@
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
+import { haptics } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
 const spring = { type: "spring", stiffness: 380, damping: 34 } as const;
@@ -29,6 +30,15 @@ export function ModalShell({
     return () => {
       document.body.style.overflow = previousOverflow;
     };
+  }, [open]);
+
+  // Haptic punctuation: a soft tick as sheets/modals arrive and dismiss.
+  const prevOpen = React.useRef(open);
+  React.useEffect(() => {
+    if (prevOpen.current === open) return;
+    prevOpen.current = open;
+    if (open) haptics.open();
+    else haptics.close();
   }, [open]);
 
   const content = (

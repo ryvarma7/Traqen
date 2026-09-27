@@ -21,6 +21,7 @@ import { NodeView } from "@/components/tracks/node-view";
 import { TimelineView } from "@/components/tracks/timeline-view";
 import { deleteTrack, setTrackStatus } from "@/lib/actions/tracks";
 import { formatShortDate } from "@/lib/dates";
+import { haptics } from "@/lib/haptics";
 import type { LearningTrack, TrackItem, TrackPhase } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -70,16 +71,24 @@ export function TrackDetailView({
     setLocalTrack((t) => ({ ...t, status }));
     const result = await setTrackStatus(localTrack.id, status);
     setStatusBusy(false);
-    if (result.error) toast.error(result.error);
-  };
-
-  const remove = async () => {
-    if (!window.confirm(`Delete "${localTrack.title}" and all its steps? This can't be undone.`)) return;
-    const result = await deleteTrack(localTrack.id);
     if (result.error) {
+      haptics.error();
       toast.error(result.error);
       return;
     }
+    haptics.toggle(status !== "On hold");
+  };
+
+  const remove = async () => {
+    haptics.warning();
+    if (!window.confirm(`Delete "${localTrack.title}" and all its steps? This can't be undone.`)) return;
+    const result = await deleteTrack(localTrack.id);
+    if (result.error) {
+      haptics.error();
+      toast.error(result.error);
+      return;
+    }
+    haptics.delete();
     toast.success("Track deleted");
     router.push("/tracks");
   };
@@ -92,6 +101,7 @@ export function TrackDetailView({
           <div className="min-w-0 flex-1">
             <Link
               href="/tracks"
+              onClick={() => haptics.tap()}
               className="mb-3 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               <ArrowLeft className="h-3.5 w-3.5" /> All tracks
@@ -173,7 +183,10 @@ export function TrackDetailView({
           <button
             key={id}
             type="button"
-            onClick={() => setView(id)}
+            onClick={() => {
+              haptics.selection();
+              setView(id);
+            }}
             className={cn(
               "relative flex h-9 min-w-[60px] flex-1 items-center justify-center gap-1.5 rounded-[7px] px-2 text-xs font-medium transition-colors sm:min-w-[72px] sm:px-3",
               view === id ? "text-black" : "text-muted-foreground hover:text-foreground"

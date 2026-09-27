@@ -18,6 +18,7 @@ import {
   deleteHackathon,
   saveHackathon,
 } from "@/lib/actions/applications";
+import { haptics } from "@/lib/haptics";
 import { HACKATHON_STATUSES, PRIORITIES, type Hackathon } from "@/lib/types";
 
 const url = z.union([z.literal(""), z.string().url("Enter a valid URL")]);
@@ -100,9 +101,11 @@ export function HackathonForm({
     setError(null);
     const result = await saveHackathon(data, item?.id);
     if (result.error) {
+      haptics.error();
       setError(result.error);
       return;
     }
+    haptics.success();
     toast.success(item ? "Hackathon updated" : "Hackathon added");
     onClose();
   };
@@ -111,9 +114,11 @@ export function HackathonForm({
     if (!item) return;
     const result = await deleteHackathon(item.id);
     if (result.error) {
+      haptics.error();
       toast.error(result.error);
       return;
     }
+    haptics.delete();
     toast.success("Hackathon deleted");
     onClose();
   };

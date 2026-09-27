@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { cycleTrackItemStatus } from "@/lib/actions/tracks";
 import { formatShortDate } from "@/lib/dates";
+import { haptics } from "@/lib/haptics";
 import type { TrackItem, TrackPhase } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -57,8 +58,10 @@ export function NodeView({
     };
   }, [updateArrows, phases.length, items.length]);
 
-  const scrollByPhase = (dir: 1 | -1) =>
+  const scrollByPhase = (dir: 1 | -1) => {
+    haptics.selection();
     scrollRef.current?.scrollBy({ left: dir * SCROLL_STEP, behavior: "smooth" });
+  };
 
   return (
     <div>
@@ -285,9 +288,13 @@ function NodeItem({
     const result = await cycleTrackItemStatus(item.id, item.status);
     setBusy(false);
     if (result.error) {
+      haptics.error();
       toast.error(result.error);
       return;
     }
+    if (next === "Done") haptics.success();
+    else if (next === "In progress") haptics.toggle(true);
+    else haptics.tapLight();
     onChange(item.id, next);
   };
 
@@ -343,7 +350,10 @@ function NodeItem({
                 href={item.resource_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  haptics.tapLight();
+                }}
                 className="inline-flex items-center gap-1 text-2xs font-medium text-foreground/70 hover:text-foreground"
               >
                 <ExternalLink className="h-2.5 w-2.5" /> link

@@ -6,6 +6,7 @@ import { Check, CircleDot, ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { CountdownPill } from "@/components/shared/countdown-pill";
 import { cycleTrackItemStatus } from "@/lib/actions/tracks";
+import { haptics } from "@/lib/haptics";
 import type { TrackItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -27,9 +28,13 @@ export function StatusToggle({
     const result = await cycleTrackItemStatus(item.id, item.status);
     setBusy(false);
     if (result.error) {
+      haptics.error();
       toast.error(result.error);
       return;
     }
+    if (next === "Done") haptics.success();
+    else if (next === "In progress") haptics.toggle(true);
+    else haptics.tapLight();
     onChange?.(next);
   };
 
@@ -105,7 +110,10 @@ export function TrackItemRow({
               href={item.resource_url}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                haptics.tapLight();
+              }}
               className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-2xs font-medium text-foreground/80 transition-colors hover:border-white/30 hover:text-foreground"
             >
               Resource <ExternalLink className="h-2.5 w-2.5" />

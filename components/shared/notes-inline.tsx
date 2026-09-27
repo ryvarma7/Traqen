@@ -4,6 +4,7 @@ import * as React from "react";
 import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
+import { haptics } from "@/lib/haptics";
 
 /** Inline quick-edit for a record's notes field. Calls a notes-only server
  *  action; the record re-renders with fresh data after revalidation. */
@@ -22,6 +23,7 @@ export function NotesInline({
   React.useEffect(() => setValue(notes ?? ""), [notes]);
 
   const start = () => {
+    haptics.tap();
     setDraft(value);
     setEditing(true);
   };
@@ -31,9 +33,11 @@ export function NotesInline({
     const result = await onSave(draft);
     setBusy(false);
     if (result.error) {
+      haptics.error();
       toast.error(result.error);
       return;
     }
+    haptics.success();
     setValue(draft.trim());
     setEditing(false);
     toast.success("Notes saved");
@@ -76,7 +80,10 @@ export function NotesInline({
             </button>
             <button
               type="button"
-              onClick={() => setEditing(false)}
+              onClick={() => {
+                haptics.tapLight();
+                setEditing(false);
+              }}
               className="glass-btn-base glass-btn-outline h-9 rounded-field px-3.5 text-sm"
             >
               Cancel

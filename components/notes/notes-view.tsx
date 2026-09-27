@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { deleteNote, saveNote, setNotePrivacy } from "@/lib/actions/notes";
 import { relativeTime } from "@/lib/dates";
+import { haptics } from "@/lib/haptics";
 import { useIsMobile } from "@/lib/hooks";
 import type { Note } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -84,6 +85,7 @@ export function NotesView({ notes }: { notes: Note[] }) {
 
   const save = async () => {
     if (!title.trim()) {
+      haptics.error();
       toast.error("A note needs a title");
       return;
     }
@@ -94,9 +96,11 @@ export function NotesView({ notes }: { notes: Note[] }) {
     );
     setBusy(false);
     if (result.error) {
+      haptics.error();
       toast.error(result.error);
       return;
     }
+    haptics.success();
     toast.success(creating ? "Note added" : "Note saved");
     close();
   };
@@ -107,9 +111,11 @@ export function NotesView({ notes }: { notes: Note[] }) {
     const result = await deleteNote(viewingId);
     setBusy(false);
     if (result.error) {
+      haptics.error();
       toast.error(result.error);
       return;
     }
+    haptics.delete();
     toast.success("Note deleted");
     close();
   };
@@ -118,16 +124,19 @@ export function NotesView({ notes }: { notes: Note[] }) {
 
   const togglePrivacy = async (note: Note) => {
     const next = !isHidden(note);
+    haptics.toggle(next);
     setPrivacy((prev) => ({ ...prev, [note.id]: next }));
     const result = await setNotePrivacy(note.id, next);
     if (result.error) {
       setPrivacy((prev) => ({ ...prev, [note.id]: !next }));
+      haptics.error();
       toast.error(result.error);
     }
   };
 
   const startEditing = () => {
     if (!viewing) return;
+    haptics.tap();
     setTitle(viewing.title);
     setContent(viewing.content ?? "");
     setColor(viewing.color);
@@ -138,7 +147,7 @@ export function NotesView({ notes }: { notes: Note[] }) {
   const overlayOpen = creating || viewing !== null;
 
   return (
-    <div>
+    <div className="relative pb-24 md:pb-28">
       {sorted.length === 0 && !creating ? (
         <div className="flex flex-col items-center rounded-card glass-section border-dashed px-6 py-14 text-center">
           <p className="text-sm text-muted-foreground">
@@ -228,7 +237,7 @@ export function NotesView({ notes }: { notes: Note[] }) {
         type="button"
         aria-label="Add note"
         onClick={openNew}
-        className="fixed fab-bottom fab-right z-40 flex h-14 w-14 items-center justify-center rounded-full glass-btn-base glass-btn-primary shadow-lg"
+        className="fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full glass-btn-base glass-btn-primary shadow-lg md:bottom-6 md:right-6"
       >
         <Plus className="h-6 w-6" />
       </motion.button>
@@ -280,7 +289,10 @@ export function NotesView({ notes }: { notes: Note[] }) {
                     key={c}
                     type="button"
                     aria-label={`Color ${c}`}
-                    onClick={() => setColor(c)}
+                    onClick={() => {
+                      haptics.selection();
+                      setColor(c);
+                    }}
                     className={cn(
                       "flex h-7 w-7 items-center justify-center rounded-full transition-transform hover:scale-110",
                       color === c && "ring-2 ring-accent ring-offset-2 ring-offset-surface"
@@ -293,7 +305,10 @@ export function NotesView({ notes }: { notes: Note[] }) {
                   <input
                     type="checkbox"
                     checked={pinned}
-                    onChange={(e) => setPinned(e.target.checked)}
+                    onChange={(e) => {
+                      haptics.toggle(e.target.checked);
+                      setPinned(e.target.checked);
+                    }}
                     className="h-4 w-4 accent-accent rounded"
                   />
                   Pin

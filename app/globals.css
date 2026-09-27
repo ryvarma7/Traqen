@@ -210,10 +210,10 @@ body:has(.app-scene)::after {
 
   /* Safe-area-aware FAB positioning */
   .fab-bottom {
-    bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + 0.75rem));
+    bottom: max(1rem, calc(env(safe-area-inset-bottom) + 0.75rem));
   }
   .fab-right {
-    right: max(1.25rem, env(safe-area-inset-right));
+    right: max(1rem, env(safe-area-inset-right) + 0.75rem);
   }
 
   .loader {

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { CalendarDays, Home, LogOut } from "lucide-react";
 import { logOut } from "@/lib/actions/auth";
+import { haptics } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
 const linkClass =
@@ -32,14 +33,14 @@ export function TopBar() {
 
       <nav className="flex items-center gap-2">
         {!isHub && (
-          <motion.div whileTap={{ scale: 0.97 }}>
+          <motion.div whileTap={{ scale: 0.97 }} onTap={() => haptics.tap()}>
             <Link href="/" className={linkClass} aria-label="Home">
               <Home className="h-4 w-4 shrink-0 text-muted-foreground md:h-3.5 md:w-3.5" />
               <span className="hidden md:inline">Home</span>
             </Link>
           </motion.div>
         )}
-        <motion.div whileTap={{ scale: 0.97 }}>
+        <motion.div whileTap={{ scale: 0.97 }} onTap={() => haptics.tap()}>
           <Link href="/calendar" className={linkClass} aria-label="Calendar">
             <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground md:h-3.5 md:w-3.5" />
             <span className="hidden md:inline">Calendar</span>
@@ -48,7 +49,10 @@ export function TopBar() {
         <motion.div whileTap={{ scale: 0.97 }}>
           <button
             type="button"
-            onClick={() => logOut()}
+            onClick={() => {
+              haptics.warning();
+              logOut();
+            }}
             className={cn(linkClass)}
             aria-label="Log out"
           >

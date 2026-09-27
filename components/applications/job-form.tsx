@@ -18,6 +18,7 @@ import {
   deleteJobApplication,
   saveJobApplication,
 } from "@/lib/actions/applications";
+import { haptics } from "@/lib/haptics";
 import { JOB_STATUSES, PRIORITIES, type JobApplication } from "@/lib/types";
 
 const url = z.union([z.literal(""), z.string().url("Enter a valid URL")]);
@@ -82,9 +83,11 @@ export function JobForm({
     setError(null);
     const result = await saveJobApplication(data, item?.id);
     if (result.error) {
+      haptics.error();
       setError(result.error);
       return;
     }
+    haptics.success();
     toast.success(item ? "Application updated" : "Application added");
     onClose();
   };
@@ -93,9 +96,11 @@ export function JobForm({
     if (!item) return;
     const result = await deleteJobApplication(item.id);
     if (result.error) {
+      haptics.error();
       toast.error(result.error);
       return;
     }
+    haptics.delete();
     toast.success("Application deleted");
     onClose();
   };

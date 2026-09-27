@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import { TrackItemRow } from "@/components/tracks/track-item-row";
 import { formatShortDate } from "@/lib/dates";
+import { haptics } from "@/lib/haptics";
 import type { TrackItem, TrackPhase } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -125,7 +126,10 @@ function PhaseNode({
 
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          haptics.selection();
+          setOpen((o) => !o);
+        }}
         className="flex w-full items-center gap-3 text-left"
       >
         <div className="min-w-0 flex-1">

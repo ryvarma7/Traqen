@@ -4,6 +4,7 @@ import * as React from "react";
 import { motion, type Variants } from "framer-motion";
 import { ArrowRight, Briefcase, CalendarDays, ClipboardList, GraduationCap, StickyNote } from "lucide-react";
 import Link from "next/link";
+import { haptics } from "@/lib/haptics";
 
 const container: Variants = {
   hidden: {},
@@ -83,6 +84,7 @@ export function NavCards({ cards }: { cards: HubCard[] }) {
             <motion.div
               whileHover={{ scale: 1.02, transition: { duration: 0.15 } }}
               whileTap={{ scale: 0.98 }}
+              onTap={() => haptics.tap()}
               className="h-full"
             >
               <Link

@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/shared/modal-shell";
 import { saveCalendarFeedback } from "@/lib/actions/calendar";
+import { haptics } from "@/lib/haptics";
 
 const PROMPT_DELAY_MS = 5000;
 
@@ -28,7 +29,12 @@ export function CalendarPrompt() {
     const res = await saveCalendarFeedback(answer, suggestion);
     // On success the page revalidates and this component unmounts; on
     // error just close so we don't nag.
-    if (res?.error) console.error(res.error);
+    if (res?.error) {
+      haptics.error();
+      console.error(res.error);
+    } else {
+      haptics.success();
+    }
     setOpen(false);
   };
 
@@ -48,7 +54,10 @@ export function CalendarPrompt() {
             type="button"
             variant={answer === "yes" ? "primary" : "outline"}
             className="flex-1"
-            onClick={() => setAnswer("yes")}
+            onClick={() => {
+              haptics.selection();
+              setAnswer("yes");
+            }}
           >
             Yes
           </Button>
@@ -56,7 +65,10 @@ export function CalendarPrompt() {
             type="button"
             variant={answer === "no" ? "primary" : "outline"}
             className="flex-1"
-            onClick={() => setAnswer("no")}
+            onClick={() => {
+              haptics.selection();
+              setAnswer("no");
+            }}
           >
             No
           </Button>
