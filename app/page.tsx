@@ -12,6 +12,39 @@ import {
 
 export const dynamic = "force-dynamic";
 
+const GREETINGS = [
+  "What's on track",
+  "What's next",
+  "How's the progress",
+  "Where are we at",
+  "What's the plan",
+  "How's everything going",
+  "What are we working on",
+  "What are we tracking",
+  "Ready to track",
+  "Ready to make progress",
+  "Let's check in",
+  "Let's see the progress",
+  "How's it going",
+  "What's happening",
+  "What are we building",
+  "How are we doing",
+  "Where are we with things",
+  "Let's get on track",
+  "Back to tracking",
+  "Ready for a quick check in",
+  "How's your day going",
+  "What's on your plate",
+  "What are we getting done",
+  "What's your focus today",
+  "What are you up to",
+  "What's the move",
+  "What's happening today",
+  "Where should we start",
+  "What's your goal today",
+  "What are we tackling today",
+];
+
 export default async function HubPage() {
   const supabase = await createClient();
 
@@ -33,6 +66,8 @@ export default async function HubPage() {
 
   const username = profileRes.data?.username ?? "there";
   const firstName = username.split(/[._-]/)[0]; // "nvidia" from "nvidia" or "nvidia_user"
+
+  const greeting = GREETINGS[Math.floor(Math.random() * GREETINGS.length)];
 
   const jobs = jobsRes.data ?? [];
   const hackathons = hackathonsRes.data ?? [];
@@ -133,14 +168,9 @@ export default async function HubPage() {
       <PostLoginLoader />
       <PageTransition>
         <div className="mb-8 md:mb-10">
-          <p className="text-[28px] md:text-[32px] font-semibold tracking-tight text-white">
-            Welcome{" "}
-            <span
-              className="text-white/60 transition-opacity duration-300"
-              style={{
-                textShadow: "0 0 24px rgba(255,255,255,0.18), 0 0 48px rgba(255,255,255,0.08)",
-              }}
-            >
+          <p className="text-[20px] md:text-[24px] font-semibold tracking-tight text-white">
+            {greeting}{" "}
+            <span className="text-white/60 transition-opacity duration-300">
               {firstName}
             </span>
           </p>
