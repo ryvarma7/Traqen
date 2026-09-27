@@ -18,27 +18,32 @@ function vibrate(pattern: Pattern) {
   }
 }
 
+/** Every pulse fires at the same strength — the Vibration API has no amplitude
+ *  control, so intensity = duration. One shared pulse keeps the feel identical
+ *  across the whole app; multi-pulse patterns differ only in rhythm. */
+const PULSE = 13;
+
 export const haptics = {
-  /** Crisp micro-tick — selection changes: tabs, dropdown picks, accordions. */
-  selection: () => vibrate(7),
-  /** Lightest tap — small controls: color dots, checkboxes, icon toggles. */
-  tapLight: () => vibrate(9),
+  /** Crisp tick — selection changes: tabs, dropdown picks, accordions. */
+  selection: () => vibrate(PULSE),
+  /** Light tap — small controls: color dots, checkboxes, icon toggles. */
+  tapLight: () => vibrate(PULSE),
   /** Standard tap — cards, tiles, list rows, secondary buttons. */
-  tap: () => vibrate(13),
-  /** Heavier press — FABs and primary actions. */
-  impact: () => vibrate(22),
+  tap: () => vibrate(PULSE),
+  /** Press — FABs and primary actions. */
+  impact: () => vibrate(PULSE),
   /** Sheet/modal sliding in. */
-  open: () => vibrate(11),
-  /** Sheet/modal dismissing — slightly lighter than open. */
-  close: () => vibrate(8),
+  open: () => vibrate(PULSE),
+  /** Sheet/modal dismissing. */
+  close: () => vibrate(PULSE),
   /** Switch-like toggle (pin, privacy): two-step on, single off. */
-  toggle: (on: boolean) => vibrate(on ? [9, 30, 11] : 8),
+  toggle: (on: boolean) => vibrate(on ? [PULSE, 30, PULSE] : PULSE),
   /** Positive confirmation — saved, added, completed. */
-  success: () => vibrate([11, 45, 17]),
+  success: () => vibrate([PULSE, 45, PULSE]),
   /** Caution before something destructive. */
-  warning: () => vibrate([14, 40, 14]),
+  warning: () => vibrate([PULSE, 40, PULSE]),
   /** Negative result — validation failure, failed request. */
-  error: () => vibrate([30, 50, 30, 50, 30]),
+  error: () => vibrate([PULSE, 50, PULSE, 50, PULSE]),
   /** Destructive commit — delete confirmed. */
-  delete: () => vibrate([20, 50, 28]),
+  delete: () => vibrate([PULSE, 50, PULSE]),
 };
