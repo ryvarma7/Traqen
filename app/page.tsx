@@ -17,9 +17,10 @@ export default async function HubPage() {
 
   // Auth check runs in parallel with the reads — the queries don't need
   // user.id because RLS already scopes every table to auth.uid().
-  const [userRes, jobsRes, hackathonsRes, tasksRes, notesRes, tracksRes, trackItemsRes] =
+  const [userRes, profileRes, jobsRes, hackathonsRes, tasksRes, notesRes, tracksRes, trackItemsRes] =
     await Promise.all([
       supabase.auth.getUser(),
+      supabase.from("profiles").select("username").single(),
       supabase.from("job_applications").select("id, company, status, deadline, follow_up_date"),
       supabase.from("hackathons").select("id, hackathon_name, status, deadline, follow_up_date"),
       supabase.from("tasks").select("id, title, status, due_date"),
@@ -29,6 +30,9 @@ export default async function HubPage() {
     ]);
 
   if (!userRes.data.user) redirect("/login");
+
+  const username = profileRes.data?.username ?? "there";
+  const firstName = username.split(/[._-]/)[0]; // "nvidia" from "nvidia" or "nvidia_user"
 
   const jobs = jobsRes.data ?? [];
   const hackathons = hackathonsRes.data ?? [];
@@ -128,6 +132,19 @@ export default async function HubPage() {
     <>
       <PostLoginLoader />
       <PageTransition>
+        <div className="mb-8 md:mb-10">
+          <p className="text-[28px] md:text-[32px] font-semibold tracking-tight text-white">
+            Welcome{" "}
+            <span
+              className="text-white/60 transition-opacity duration-300"
+              style={{
+                textShadow: "0 0 24px rgba(255,255,255,0.18), 0 0 48px rgba(255,255,255,0.08)",
+              }}
+            >
+              {firstName}
+            </span>
+          </p>
+        </div>
         <AttentionStrip items={attention} />
         <NavCards cards={cards} />
       </PageTransition>
