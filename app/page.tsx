@@ -64,9 +64,6 @@ export default async function HubPage() {
 
   if (!userRes.data.user) redirect("/login");
 
-  const username = profileRes.data?.username ?? "there";
-  const firstName = username.split(/[._-]/)[0]; // "nvidia" from "nvidia" or "nvidia_user"
-
   const greeting = GREETINGS[Math.floor(Math.random() * GREETINGS.length)];
 
   const jobs = jobsRes.data ?? [];
@@ -169,10 +166,7 @@ export default async function HubPage() {
       <PageTransition>
         <div className="mb-8 md:mb-10">
           <p className="text-[20px] md:text-[24px] font-semibold tracking-tight text-white">
-            {greeting}{" "}
-            <span className="text-white/60 transition-opacity duration-300">
-              {firstName}
-            </span>
+            {greeting}
           </p>
         </div>
         <AttentionStrip items={attention} />
