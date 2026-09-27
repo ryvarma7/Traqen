@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
-import { Check, CircleDot, ExternalLink, Loader2 } from "lucide-react";
+import { Check, CircleDot, ExternalLink } from "lucide-react";
+import { ThinkingOrb } from "thinking-orbs";
 import { toast } from "sonner";
 import { CountdownPill } from "@/components/shared/countdown-pill";
 import { cycleTrackItemStatus } from "@/lib/actions/tracks";
@@ -54,7 +55,7 @@ export function StatusToggle({
       )}
     >
       {busy ? (
-        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+        <ThinkingOrb state="solving" size={20} theme="dark" />
       ) : item.status === "Done" ? (
         <Check className="h-3.5 w-3.5" strokeWidth={3} />
       ) : item.status === "In progress" ? (

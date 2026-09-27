@@ -8,8 +8,8 @@ import {
   ChevronRight,
   CircleDot,
   ExternalLink,
-  Loader2,
 } from "lucide-react";
+import { ThinkingOrb } from "thinking-orbs";
 import { toast } from "sonner";
 import { cycleTrackItemStatus } from "@/lib/actions/tracks";
 import { formatShortDate } from "@/lib/dates";
@@ -323,7 +323,7 @@ function NodeItem({
           )}
         >
           {busy ? (
-            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+            <ThinkingOrb state="solving" size={20} theme="dark" />
           ) : done ? (
             <Check className="h-3 w-3" strokeWidth={3} />
           ) : item.status === "In progress" ? (

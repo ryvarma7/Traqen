@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2 } from "lucide-react";
+import { ThinkingOrb } from "thinking-orbs";
 import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/shared/modal-shell";
 import { saveCalendarFeedback } from "@/lib/actions/calendar";
@@ -95,7 +95,7 @@ export function CalendarPrompt() {
             onClick={submit}
             disabled={!answer || saving}
           >
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            {saving && <ThinkingOrb state="solving" size={20} theme="light" />}
             Submit
           </Button>
         </div>

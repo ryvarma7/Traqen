@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { AttentionStrip, type AttentionItem } from "@/components/hub/attention-strip";
 import { NavCards, type HubCard } from "@/components/hub/nav-cards";
 import { PageTransition } from "@/components/shell/page-transition";
+import { PostLoginLoader } from "@/components/shell/post-login-loader";
 import { createClient } from "@/lib/supabase/server";
 import { daysUntil } from "@/lib/dates";
 import {
@@ -125,6 +126,7 @@ export default async function HubPage() {
 
   return (
     <>
+      <PostLoginLoader />
       <PageTransition>
         <AttentionStrip items={attention} />
         <NavCards cards={cards} />

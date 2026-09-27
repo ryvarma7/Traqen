@@ -26,7 +26,10 @@ export async function GET(request: Request) {
       // Provisioning is best-effort: a missing/out-of-date migration must not
       // strand a user after Google has already authenticated them.
       await supabase.rpc("ensure_profile");
-      return NextResponse.redirect(new URL("/", origin));
+      // justSignedIn=1 triggers the post-login loading overlay on the hub.
+      const home = new URL("/", origin);
+      home.searchParams.set("justSignedIn", "1");
+      return NextResponse.redirect(home);
     }
   }
 
