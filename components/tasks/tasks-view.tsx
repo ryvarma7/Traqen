@@ -2,16 +2,35 @@
 
 import * as React from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { ChevronDown, Link2, Pencil, Plus, StickyNote } from "lucide-react";
+import {
+  ArrowDownNarrowWide,
+  ArrowUpNarrowWide,
+  ChevronDown,
+  Link2,
+  Pencil,
+  Plus,
+  StickyNote,
+} from "lucide-react";
 import { toast } from "sonner";
 import { FormSheet } from "@/components/shared/form-sheet";
+import { FabPlus } from "@/components/shared/fab-plus";
 import { CountdownPill } from "@/components/shared/countdown-pill";
 import { PriorityPill } from "@/components/shared/priority-pill";
 import { TaskForm, type LinkableItem } from "@/components/tasks/task-form";
 import { setTaskStatus } from "@/lib/actions/tasks";
+import { daysUntil } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
+import { priorityRank } from "@/lib/priority";
 import { TASK_STATUSES, type Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+type SortKey = "priority" | "due" | "title";
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "priority", label: "Priority" },
+  { key: "due", label: "Due" },
+  { key: "title", label: "A–Z" },
+];
 
 const listVariants: Variants = {
   hidden: {},
@@ -40,6 +59,41 @@ export function TasksView({
     preset: "To do",
   });
   const [openSection, setOpenSection] = React.useState<string | null>("To do");
+  const [sortKey, setSortKey] = React.useState<SortKey>("priority");
+  // Ascending = High first, soonest first, A–Z — the useful default for all three.
+  const [sortAsc, setSortAsc] = React.useState(true);
+
+  // Tasks stay in their status columns — sorting only reorders within one.
+  const groups = React.useMemo(() => {
+    const map = new Map<string, Task[]>();
+    for (const status of TASK_STATUSES) map.set(status, []);
+    for (const task of tasks) map.get(task.status)?.push(task);
+
+    for (const list of map.values()) {
+      list.sort((a, b) => {
+        let cmp = 0;
+        if (sortKey === "priority")
+          cmp = priorityRank(a.priority) - priorityRank(b.priority);
+        else if (sortKey === "due") {
+          const da = a.due_date ? daysUntil(a.due_date) : Infinity;
+          const db = b.due_date ? daysUntil(b.due_date) : Infinity;
+          cmp = da - db;
+        } else cmp = a.title.localeCompare(b.title);
+        if (cmp === 0) cmp = a.title.localeCompare(b.title);
+        return sortAsc ? cmp : -cmp;
+      });
+    }
+    return map;
+  }, [tasks, sortKey, sortAsc]);
+
+  const toggleSort = (key: SortKey) => {
+    haptics.selection();
+    if (sortKey === key) setSortAsc((v) => !v);
+    else {
+      setSortKey(key);
+      setSortAsc(true);
+    }
+  };
 
   const linkLabel = React.useMemo(() => {
     const map = new Map(linkables.map((l) => [l.id, l.label]));
@@ -82,10 +136,50 @@ export function TasksView({
         </div>
       ) : (
         <>
+          {/* Sort control — the kanban has no table headers to click. */}
+          <div className="mb-3 flex items-center justify-end gap-2">
+            <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+              Sort
+            </span>
+            <div className="relative inline-flex rounded-field border border-border bg-muted/60 p-1">
+              {SORT_OPTIONS.map((o) => (
+                <button
+                  key={o.key}
+                  type="button"
+                  onClick={() => toggleSort(o.key)}
+                  className={cn(
+                    "relative z-10 rounded-[7px] px-3 py-1.5 text-xs font-medium transition-colors",
+                    sortKey === o.key
+                      ? "border border-white/10 bg-white/[0.06] text-foreground"
+                      : "border border-transparent text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              type="button"
+              aria-label={sortAsc ? "Sort descending" : "Sort ascending"}
+              onClick={() => {
+                haptics.selection();
+                setSortAsc((v) => !v);
+              }}
+              className="glass-btn-base glass-btn-outline flex h-9 w-9 items-center justify-center rounded-field text-muted-foreground hover:text-foreground"
+            >
+              {sortAsc ? (
+                <ArrowUpNarrowWide className="h-4 w-4" />
+              ) : (
+                <ArrowDownNarrowWide className="h-4 w-4" />
+              )}
+            </motion.button>
+          </div>
+
           {/* Desktop: Kanban columns */}
           <div className="hidden gap-4 md:grid md:grid-cols-3">
             {TASK_STATUSES.map((status) => {
-              const group = tasks.filter((t) => t.status === status);
+              const group = groups.get(status) ?? [];
               return (
                 <section key={status} className="flex flex-col">
                   <div className="mb-2 flex items-center justify-between px-1">
@@ -138,7 +232,7 @@ export function TasksView({
           {/* Mobile: collapsible accordions per status */}
           <div className="space-y-3 md:hidden">
             {TASK_STATUSES.map((status) => {
-              const group = tasks.filter((t) => t.status === status);
+              const group = groups.get(status) ?? [];
               const isOpen = openSection === status;
               return (
                 <section key={status} className="rounded-card glass-section overflow-hidden">
@@ -212,16 +306,10 @@ export function TasksView({
       )}
 
       {/* Floating add button with glowing Framer glass aesthetic */}
-      <motion.button
-        whileTap={{ scale: 0.95 }}
-        whileHover={{ scale: 1.05 }}
-        type="button"
-        aria-label="Add task"
+      <FabPlus
+        label="Add task"
         onClick={() => setSheet({ open: true, editing: null, preset: "To do" })}
-        className="fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full glass-btn-base glass-btn-primary shadow-lg md:bottom-6 md:right-6"
-      >
-        <Plus className="h-6 w-6" />
-      </motion.button>
+      />
 
       <FormSheet
         open={sheet.open}

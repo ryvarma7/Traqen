@@ -13,6 +13,7 @@ import { deleteNote, saveNote, setNotePrivacy } from "@/lib/actions/notes";
 import { relativeTime } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
 import { useIsMobile } from "@/lib/hooks";
+import { FabPlus } from "@/components/shared/fab-plus";
 import type { Note } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ModalShell } from "@/components/shared/modal-shell";
@@ -231,16 +232,7 @@ export function NotesView({ notes }: { notes: Note[] }) {
       )}
 
       {/* Floating add button with glowing Framer glass aesthetic */}
-      <motion.button
-        whileTap={{ scale: 0.95 }}
-        whileHover={{ scale: 1.05 }}
-        type="button"
-        aria-label="Add note"
-        onClick={openNew}
-        className="fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full glass-btn-base glass-btn-primary shadow-lg md:bottom-6 md:right-6"
-      >
-        <Plus className="h-6 w-6" />
-      </motion.button>
+      <FabPlus label="Add note" onClick={openNew} />
 
       {/* Full view on mobile, centered on desktop — same view turns editable */}
       <ModalShell open={overlayOpen} onClose={close} variant={isMobile ? "sheet" : "centered"}>

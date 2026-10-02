@@ -8,11 +8,10 @@ create extension if not exists "uuid-ossp";
 -- Profiles: maps a chosen username to the real auth user
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  username text unique not null,
+  username text not null,
   email_internal text not null,
   auth_provider text not null default 'google',
-  -- Per-user UI preferences, e.g. {"calendar_prompt_seen": true,
-  -- "calendar_prompt_answer": "yes"} for the one-time GCal popup.
+  -- Per-user UI preferences.
   preferences jsonb not null default '{}'::jsonb,
   created_at timestamptz default now()
 );
@@ -50,9 +49,9 @@ $$;
 revoke all on function public.get_email_for_username(text) from public, anon, authenticated;
 
 -- First Google sign-in: create the profiles row if it doesn't exist yet.
--- Username is derived from the Google account's email local part and made
--- unique by appending a numeric suffix on collision. The real Google email
--- never leaves auth.users — the UI only ever sees the username.
+-- Username is derived from the Google account's email local part. The real
+-- Google email never leaves auth.users — the UI only ever sees the username.
+-- Usernames are display names, not identifiers, so they aren't unique.
 create or replace function public.ensure_profile()
 returns text
 language plpgsql
@@ -64,7 +63,6 @@ declare
   google_email text;
   base_username text;
   candidate text;
-  n int;
 begin
   if uid is null then
     return null;
@@ -85,16 +83,17 @@ begin
     base_username := 'user';
   end if;
 
-  for n in 0..24 loop
-    candidate := case when n = 0 then base_username else base_username || n::text end;
-    begin
-      insert into public.profiles (id, username, email_internal, auth_provider)
-      values (uid, candidate, google_email, 'google');
-      return candidate;
-    exception when unique_violation then
-      null; -- taken — try the next suffix
-    end;
-  end loop;
+  -- No unique constraint anymore, so no suffix loop needed. The only real
+  -- collision is the same email local part twice (same per-user row already
+  -- returned above); a random suffix is a belt-and-braces fallback.
+  candidate := base_username;
+  begin
+    insert into public.profiles (id, username, email_internal, auth_provider)
+    values (uid, candidate, google_email, 'google');
+    return candidate;
+  exception when unique_violation then
+    null;
+  end;
 
   candidate := base_username || floor(random() * 9000 + 1000)::int::text;
   insert into public.profiles (id, username, email_internal, auth_provider)
@@ -320,26 +319,6 @@ create index if not exists idx_track_phases_track_id on public.track_phases(trac
 create index if not exists idx_learning_tracks_user_id on public.learning_tracks(user_id);
 
 -- ---------------------------------------------------------------------------
--- Calendar feedback: the one-time "integrate Google Calendar?" popup on
--- /calendar. One row per user; the answer + optional suggestion text are
--- stored server-side so it never reappears on another device.
--- ---------------------------------------------------------------------------
-create table if not exists public.calendar_feedback (
-  id uuid primary key default uuid_generate_v4(),
-  user_id uuid references auth.users(id) on delete cascade not null unique,
-  answer text not null check (answer in ('yes','no')),
-  suggestion text,
-  created_at timestamptz default now()
-);
-
-alter table public.calendar_feedback enable row level security;
-drop policy if exists "Users manage own calendar feedback" on public.calendar_feedback;
-create policy "Users manage own calendar feedback"
-  on public.calendar_feedback for all
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
-
--- ---------------------------------------------------------------------------
 -- Table privileges. RLS decides WHICH rows are visible, but Postgres also
 -- requires table-level GRANTs — without them every query fails with 403
 -- "permission denied" even when the policies pass, and the signup profile
@@ -356,7 +335,6 @@ grant select, insert, update, delete on public.notes to authenticated;
 grant select, insert, update, delete on public.learning_tracks to authenticated;
 grant select, insert, update, delete on public.track_phases to authenticated;
 grant select, insert, update, delete on public.track_items to authenticated;
-grant select, insert, update, delete on public.calendar_feedback to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Migration for existing databases: schema v2 (Google OAuth era).

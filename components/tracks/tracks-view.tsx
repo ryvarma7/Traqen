@@ -6,6 +6,7 @@ import { CalendarDays, GraduationCap, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ImportTrackModal } from "@/components/tracks/import-track-modal";
+import { FabPlus } from "@/components/shared/fab-plus";
 import { deleteTrack } from "@/lib/actions/tracks";
 import { formatShortDate } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
@@ -30,10 +31,11 @@ export type TrackSummary = {
   title: string;
   description: string | null;
   start_date: string;
+  /** Track-level status — a distinct three-state field from the items'
+   *  two-state done/not-done, and still surfaced as the card pill. */
   status: "In progress" | "Completed" | "On hold";
   total: number;
   done: number;
-  in_progress: number;
   created_at: string;
 };
 
@@ -161,16 +163,7 @@ export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
       )}
 
       {/* Floating import button */}
-      <motion.button
-        whileTap={{ scale: 0.95 }}
-        whileHover={{ scale: 1.05 }}
-        type="button"
-        aria-label="Import track"
-        onClick={() => setImportOpen(true)}
-        className="fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full glass-btn-base glass-btn-primary shadow-lg md:bottom-6 md:right-6"
-      >
-        <Plus className="h-6 w-6" />
-      </motion.button>
+      <FabPlus label="Import track" onClick={() => setImportOpen(true)} />
 
       <ImportTrackModal open={importOpen} onClose={() => setImportOpen(false)} />
     </div>

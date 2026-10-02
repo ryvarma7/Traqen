@@ -4,18 +4,13 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ThinkingOrb } from "thinking-orbs";
 
-/** Full-screen thinking-orb overlay shown right after Google sign-in.
- *  /auth/callback redirects to /?justSignedIn=1; while that param is
- *  present the overlay blur-ins immediately, holds the orb for 2s while
- *  the hub data loads underneath, then blur-outs and strips the param. */
-export function PostLoginLoader() {
-  const [active, setActive] = useState(false);
-
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).has("justSignedIn")) {
-      setActive(true);
-    }
-  }, []);
+/** Full-screen thinking-orb overlay shown right after Google sign-in. */
+export function PostLoginLoader({
+  initiallyActive,
+}: {
+  initiallyActive: boolean;
+}) {
+  const [active, setActive] = useState(initiallyActive);
 
   useEffect(() => {
     if (!active) return;
@@ -36,7 +31,7 @@ export function PostLoginLoader() {
     <AnimatePresence>
       {active && (
         <motion.div
-          initial={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
+          initial={false}
           animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
           exit={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
           transition={{ duration: 0.25, ease: "easeOut" }}

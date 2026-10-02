@@ -16,6 +16,7 @@ import { HackathonForm } from "@/components/applications/hackathon-form";
 import { JobForm } from "@/components/applications/job-form";
 import { CountdownPill } from "@/components/shared/countdown-pill";
 import { FormSheet } from "@/components/shared/form-sheet";
+import { FabPlus } from "@/components/shared/fab-plus";
 import { NotesInline } from "@/components/shared/notes-inline";
 import { PriorityPill } from "@/components/shared/priority-pill";
 import { StatusPill } from "@/components/shared/status-pill";
@@ -27,11 +28,12 @@ import {
 import { daysUntil } from "@/lib/dates";
 import { DEFAULT_OPTIONS, optionsForField } from "@/lib/defaults";
 import { haptics } from "@/lib/haptics";
+import { priorityRank } from "@/lib/priority";
 import { cn } from "@/lib/utils";
 import type { DropdownOption, Hackathon, JobApplication } from "@/lib/types";
 
 type Tab = "jobs" | "hackathons";
-type SortKey = "name" | "status" | "deadline";
+type SortKey = "name" | "status" | "priority" | "deadline";
 
 const listVariants: Variants = {
   hidden: {},
@@ -107,6 +109,8 @@ export function ApplicationsView({
       let cmp = 0;
       if (sortKey === "name") cmp = name(a).localeCompare(name(b));
       else if (sortKey === "status") cmp = a.status.localeCompare(b.status);
+      else if (sortKey === "priority")
+        cmp = priorityRank(a.priority) - priorityRank(b.priority);
       else {
         const da = a.deadline ? daysUntil(a.deadline) : Infinity;
         const db = b.deadline ? daysUntil(b.deadline) : Infinity;
@@ -226,7 +230,7 @@ export function ApplicationsView({
                   <tr>
                     <SortableHeader label={tab === "jobs" ? "Company" : "Hackathon"} active={sortKey === "name"} onClick={() => toggleSort("name")} />
                     <SortableHeader label="Status" active={sortKey === "status"} onClick={() => toggleSort("status")} />
-                    <th className="px-3.5 py-2.5 text-left text-2xs font-medium uppercase tracking-wide text-muted-foreground">Priority</th>
+                    <SortableHeader label="Priority" active={sortKey === "priority"} onClick={() => toggleSort("priority")} />
                     <SortableHeader label="Deadline" active={sortKey === "deadline"} onClick={() => toggleSort("deadline")} />
                     <th className="px-3.5 py-2.5 text-left text-2xs font-medium uppercase tracking-wide text-muted-foreground">Follow-up</th>
                     <th className="w-20" />
@@ -414,19 +418,13 @@ export function ApplicationsView({
       )}
 
       {/* Floating add button */}
-      <motion.button
-        whileTap={{ scale: 0.95 }}
-        whileHover={{ scale: 1.05 }}
-        type="button"
-        aria-label={`Add ${noun}`}
+      <FabPlus
+        label={`Add ${noun}`}
         onClick={() => {
           haptics.impact();
           setSheet({ open: true, editing: null });
         }}
-        className="glass-btn-base glass-btn-primary fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full shadow-lg md:bottom-6 md:right-6"
-      >
-        <Plus className="h-6 w-6" />
-      </motion.button>
+      />
 
       <FormSheet
         open={sheet.open}

@@ -2,6 +2,10 @@ import type { Metadata, Viewport } from "next";
 import { Toaster } from "sonner";
 import { Raleway } from "next/font/google";
 import ServiceWorkerRegister from "@/components/service-worker";
+import { ProfileProvider } from "@/lib/profile-store";
+import { TimerProvider } from "@/lib/timer-store";
+import { ProfileRenameModal } from "@/components/shell/profile-rename-modal";
+import { TimerPill } from "@/components/shell/timer-pill";
 import "./globals.css";
 
 const raleway = Raleway({
@@ -48,7 +52,25 @@ export default function RootLayout({
       <body
         className={`${raleway.variable} bg-background text-foreground antialiased`}
       >
-        {children}
+        {/*
+         * ProfileProvider sits at the app root so the top-bar avatar (in every
+         * PageTransition) and the rename modal share one fetch of the user's
+         * profile + one modal open-state. ProfileRenameModal renders from that
+         * store and is mounted once here.
+         *
+         * TimerProvider does the same job for the session timer: one clock
+         * shared by the top-bar trigger and the floating pill, so a countdown
+         * keeps running across navigations. TimerPill is mounted here (not
+         * inside PageTransition) so it survives every page and owns the single
+         * bottom sheet.
+         */}
+        <ProfileProvider>
+          <TimerProvider>
+            {children}
+            <ProfileRenameModal />
+            <TimerPill />
+          </TimerProvider>
+        </ProfileProvider>
         <ServiceWorkerRegister />
         <Toaster position="top-right" toastOptions={{
           classNames: {

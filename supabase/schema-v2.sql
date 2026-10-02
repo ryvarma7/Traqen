@@ -18,26 +18,14 @@ alter table public.profiles
 alter table public.profiles
   add column if not exists preferences jsonb not null default '{}'::jsonb;
 
--- One-time "should we add Google Calendar integration?" popup on /calendar.
--- One row per user (unique), stored server-side so the popup never
--- reappears on a different device. Query this later to gauge demand.
-create table if not exists public.calendar_feedback (
-  id uuid primary key default uuid_generate_v4(),
-  user_id uuid references auth.users(id) on delete cascade not null unique,
-  answer text not null check (answer in ('yes','no')),
-  suggestion text,
-  created_at timestamptz default now()
-);
+-- Usernames are display names ("Ready for a quick check in Yeshwanth"), not
+-- identifiers — two people can share one. Drop the unique constraint (the
+-- primary key is auth.users.id, which keeps rows distinct).
+alter table public.profiles drop constraint if exists profiles_username_key;
 
-alter table public.calendar_feedback enable row level security;
-
-drop policy if exists "Users manage own calendar feedback" on public.calendar_feedback;
-create policy "Users manage own calendar feedback"
-  on public.calendar_feedback for all
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
-
-grant select, insert, update, delete on public.calendar_feedback to authenticated;
+-- Retire the one-time "should we add Google Calendar integration?" popup
+-- storage — the popup and its code are gone.
+drop table if exists public.calendar_feedback;
 
 -- Section upgrades (student-focused fields).
 alter table public.job_applications add column if not exists salary_range text;
@@ -50,9 +38,9 @@ alter table public.hackathons add column if not exists submission_link text;
 drop function if exists public.get_email_for_username(text);
 
 -- First Google sign-in: create the profiles row if it doesn't exist yet.
--- Username is derived from the Google account's email local part and made
--- unique by appending a numeric suffix on collision. The real Google email
--- never leaves auth.users — the UI only ever sees the username.
+-- Username is derived from the Google account's email local part. The real
+-- Google email never leaves auth.users — the UI only ever sees the username.
+-- Usernames are display names, not identifiers, so they aren't unique.
 create or replace function public.ensure_profile()
 returns text
 language plpgsql
@@ -64,7 +52,6 @@ declare
   google_email text;
   base_username text;
   candidate text;
-  n int;
 begin
   if uid is null then
     return null;
@@ -85,16 +72,17 @@ begin
     base_username := 'user';
   end if;
 
-  for n in 0..24 loop
-    candidate := case when n = 0 then base_username else base_username || n::text end;
-    begin
-      insert into public.profiles (id, username, email_internal, auth_provider)
-      values (uid, candidate, google_email, 'google');
-      return candidate;
-    exception when unique_violation then
-      null; -- taken — try the next suffix
-    end;
-  end loop;
+  -- No unique constraint anymore, so no suffix loop needed. The only real
+  -- collision is the same email local part twice (same per-user row already
+  -- returned above); a random suffix is a belt-and-braces fallback.
+  candidate := base_username;
+  begin
+    insert into public.profiles (id, username, email_internal, auth_provider)
+    values (uid, candidate, google_email, 'google');
+    return candidate;
+  exception when unique_violation then
+    null;
+  end;
 
   candidate := base_username || floor(random() * 9000 + 1000)::int::text;
   insert into public.profiles (id, username, email_internal, auth_provider)

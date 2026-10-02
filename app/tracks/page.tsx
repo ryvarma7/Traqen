@@ -17,13 +17,14 @@ export default async function TracksPage() {
 
   if (!userRes.data.user) redirect("/login");
 
-  // Aggregate per-track progress client-side from the items rows.
-  const totals = new Map<string, { total: number; done: number; in_progress: number }>();
+  // Aggregate per-track progress client-side from the items rows. Items are
+  // two-state in the UI (done / not done); rows still carrying the legacy
+  // "In progress" value simply count as not done.
+  const totals = new Map<string, { total: number; done: number }>();
   for (const item of itemsRes.data ?? []) {
-    const agg = totals.get(item.track_id) ?? { total: 0, done: 0, in_progress: 0 };
+    const agg = totals.get(item.track_id) ?? { total: 0, done: 0 };
     agg.total += 1;
     if (item.status === "Done") agg.done += 1;
-    if (item.status === "In progress") agg.in_progress += 1;
     totals.set(item.track_id, agg);
   }
 
@@ -36,7 +37,6 @@ export default async function TracksPage() {
     created_at: t.created_at,
     total: totals.get(t.id)?.total ?? 0,
     done: totals.get(t.id)?.done ?? 0,
-    in_progress: totals.get(t.id)?.in_progress ?? 0,
   }));
 
   return (

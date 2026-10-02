@@ -4,10 +4,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { CalendarDays, Home, LogOut } from "lucide-react";
-import { logOut } from "@/lib/actions/auth";
+import { CalendarDays, Home } from "lucide-react";
 import { haptics } from "@/lib/haptics";
-import { cn } from "@/lib/utils";
+import { ProfileMenu } from "@/components/shell/profile-menu";
+import { TimerButton } from "@/components/shell/timer-button";
 
 const linkClass =
   "glass-btn-base glass-btn-outline flex h-10 items-center justify-center gap-1.5 rounded-field px-2.5 transition-all md:h-9 md:min-w-9 md:px-3 md:text-sm md:font-medium";
@@ -46,20 +46,8 @@ export function TopBar() {
             <span className="hidden md:inline">Calendar</span>
           </Link>
         </motion.div>
-        <motion.div whileTap={{ scale: 0.97 }}>
-          <button
-            type="button"
-            onClick={() => {
-              haptics.warning();
-              logOut();
-            }}
-            className={cn(linkClass)}
-            aria-label="Log out"
-          >
-            <LogOut className="h-4 w-4 shrink-0 text-muted-foreground md:h-3.5 md:w-3.5" />
-            <span className="hidden md:inline">Log out</span>
-          </button>
-        </motion.div>
+        <TimerButton />
+        <ProfileMenu />
       </nav>
     </div>
   );

@@ -137,8 +137,4 @@ export function groupByDate(events: CalendarEvent[]): Map<string, CalendarEvent[
 }
 
 /** YYYY-MM-DD in local time (never toISOString — that shifts timezones). */
-export function dateKey(d: Date): string {
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${day}`;
-}
+export { dateKey } from "@/lib/dates";

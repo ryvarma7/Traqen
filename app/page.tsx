@@ -3,6 +3,7 @@ import { AttentionStrip, type AttentionItem } from "@/components/hub/attention-s
 import { NavCards, type HubCard } from "@/components/hub/nav-cards";
 import { PageTransition } from "@/components/shell/page-transition";
 import { PostLoginLoader } from "@/components/shell/post-login-loader";
+import { NameEntryGate } from "@/components/hub/name-entry-gate";
 import { createClient } from "@/lib/supabase/server";
 import { daysUntil } from "@/lib/dates";
 import {
@@ -45,7 +46,12 @@ const GREETINGS = [
   "What are we tackling today",
 ];
 
-export default async function HubPage() {
+export default async function HubPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ justSignedIn?: string | string[] }>;
+}) {
+  const { justSignedIn } = await searchParams;
   const supabase = await createClient();
 
   // Auth check runs in parallel with the reads — the queries don't need
@@ -53,7 +59,7 @@ export default async function HubPage() {
   const [userRes, profileRes, jobsRes, hackathonsRes, tasksRes, notesRes, tracksRes, trackItemsRes] =
     await Promise.all([
       supabase.auth.getUser(),
-      supabase.from("profiles").select("username").single(),
+      supabase.from("profiles").select("username, preferences").single(),
       supabase.from("job_applications").select("id, company, status, deadline, follow_up_date"),
       supabase.from("hackathons").select("id, hackathon_name, status, deadline, follow_up_date"),
       supabase.from("tasks").select("id, title, status, due_date"),
@@ -63,6 +69,16 @@ export default async function HubPage() {
     ]);
 
   if (!userRes.data.user) redirect("/login");
+
+  const profileUsername = profileRes.data?.username;
+  const preferences = profileRes.data?.preferences ?? {};
+  // Ask for a name only when none is present, or the user has never entered
+  // one — the username auto-derived from the Google email on first sign-in
+  // doesn't count as entered.
+  const hasEnteredName =
+    Boolean(profileUsername) && preferences.name_set === true;
+  const needsName = !hasEnteredName;
+  const username = profileUsername ?? "there";
 
   const greeting = GREETINGS[Math.floor(Math.random() * GREETINGS.length)];
 
@@ -162,11 +178,17 @@ export default async function HubPage() {
 
   return (
     <>
-      <PostLoginLoader />
+      <PostLoginLoader initiallyActive={justSignedIn === "1"} />
       <PageTransition>
+        <NameEntryGate needsName={needsName} />
         <div className="mb-8 md:mb-10">
           <p className="text-[20px] md:text-[24px] font-semibold tracking-tight text-white">
-            {greeting}
+            {greeting}{" "}
+            {hasEnteredName && (
+              <span className="text-white/60 transition-opacity duration-300">
+                {username}
+              </span>
+            )}
           </p>
         </div>
         <AttentionStrip items={attention} />
