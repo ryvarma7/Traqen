@@ -65,7 +65,7 @@ export default async function HubPage({
       supabase.from("tasks").select("id, title, status, due_date"),
       supabase.from("notes").select("id", { count: "exact", head: true }),
       supabase.from("learning_tracks").select("id, title, status"),
-      supabase.from("track_items").select("track_id, title, status, target_date"),
+      supabase.from("track_items").select("id, track_id, title, status, target_date"),
     ]);
 
   if (!userRes.data.user) redirect("/login");
@@ -121,8 +121,10 @@ export default async function HubPage({
   }
   for (const item of trackItems) {
     if (item.status !== "Done") {
+      // Key on the step's own id — track_id repeats for every step in a track,
+      // which collided whenever two steps shared a target_date.
       push(
-        item.track_id,
+        item.id,
         `/tracks/${item.track_id}`,
         `${trackTitles.get(item.track_id) ?? "Track"} · ${item.title}`,
         "Course step",

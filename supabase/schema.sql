@@ -18,6 +18,15 @@ create table if not exists public.profiles (
 
 alter table public.profiles enable row level security;
 
+-- Usernames are display names ("Ready for a quick check in Yeshwanth"), not
+-- identifiers — two people may share one, and the hub greeting shows them
+-- verbatim. Older databases were created with `username text unique`, which
+-- made renaming to a name another account already held fail with a unique
+-- violation (surfaced to the user as a bare "Failed to update username").
+-- Idempotent, so it is safe on a fresh install and as a repair on an existing
+-- one. Postgres auto-named the constraint profiles_username_key.
+alter table public.profiles drop constraint if exists profiles_username_key;
+
 drop policy if exists "Users can view own profile" on public.profiles;
 create policy "Users can view own profile"
   on public.profiles for select

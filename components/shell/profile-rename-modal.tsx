@@ -13,12 +13,16 @@ import { haptics } from "@/lib/haptics";
 import { useProfile } from "@/lib/profile-store";
 import { cn } from "@/lib/utils";
 
+// Display name, not a handle: spaces and punctuation are allowed so it reads
+// naturally in the greeting. Must match the schema in
+// app/api/profile/username/route.ts.
 const schema = z.object({
   username: z
     .string()
+    .trim()
     .min(2, "At least 2 characters")
     .max(30, "Max 30 characters")
-    .regex(/^[a-zA-Z0-9_-]+$/, "Letters, numbers, underscore, hyphen only"),
+    .regex(/^[\p{L}\p{N}][\p{L}\p{N} ._'-]*$/u, "Start with a letter or number"),
 });
 
 type FormData = z.infer<typeof schema>;
