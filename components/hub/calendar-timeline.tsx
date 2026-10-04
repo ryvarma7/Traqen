@@ -164,7 +164,10 @@ function DayTimeline({
   );
 }
 
-/** Seven-day strip — one column per day, events listed under the date. */
+/** Seven-day strip — one column per day, events listed under the date.
+ *  The min-width lives on the INNER grid, never on the scroll container: an
+ *  element that is both `min-w-*` and `overflow-x-auto` can't shrink to its
+ *  parent, so it would widen the page instead of scrolling. */
 function WeekStrip({
   start,
   eventsByDate,
@@ -178,33 +181,35 @@ function WeekStrip({
   });
 
   return (
-    <div className="no-scrollbar grid min-w-[560px] grid-cols-7 gap-1.5 overflow-x-auto">
-      {days.map(({ key, day, weekday }) => {
-        const events = eventsByDate[key] ?? [];
-        return (
-          <div key={key} className="rounded-field bg-card-hover/60 p-2">
-            <p className="text-2xs text-muted-foreground/70">{weekday}</p>
-            <p className="font-mono text-sm tabular-nums text-foreground">{day}</p>
-            <div className="mt-2 space-y-1">
-              {events.length === 0 ? (
-                <span className="block h-1 w-6 rounded-full bg-white/10" aria-hidden />
-              ) : (
-                events.slice(0, 3).map((e) => (
-                  <Link
-                    key={e.id}
-                    href={e.href}
-                    title={e.title}
-                    className="block h-1.5 w-full rounded-full transition-opacity hover:opacity-80"
-                    style={{ background: sourceDot[e.source] }}
-                  >
-                    <span className="sr-only">{e.title}</span>
-                  </Link>
-                ))
-              )}
+    <div className="no-scrollbar -mx-1 overflow-x-auto px-1">
+      <div className="grid min-w-[540px] grid-cols-7 gap-1.5">
+        {days.map(({ key, day, weekday }) => {
+          const events = eventsByDate[key] ?? [];
+          return (
+            <div key={key} className="rounded-field bg-card-hover/60 p-2">
+              <p className="text-2xs text-muted-foreground/70">{weekday}</p>
+              <p className="font-mono text-sm tabular-nums text-foreground">{day}</p>
+              <div className="mt-2 space-y-1">
+                {events.length === 0 ? (
+                  <span className="block h-1 w-6 rounded-full bg-white/10" aria-hidden />
+                ) : (
+                  events.slice(0, 3).map((e) => (
+                    <Link
+                      key={e.id}
+                      href={e.href}
+                      title={e.title}
+                      className="block h-1.5 w-full rounded-full transition-opacity hover:opacity-80"
+                      style={{ background: sourceDot[e.source] }}
+                    >
+                      <span className="sr-only">{e.title}</span>
+                    </Link>
+                  ))
+                )}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -341,8 +341,12 @@ body:has(.app-scene)::after {
     border: 1px solid rgba(255, 255, 255, 0.10);
   }
 
-  /* Clear the floating tab bar so the last row is never trapped under it. */
+  /* Clear the floating tab bar so the last row is never trapped under it.
+     The plain value is the fallback: where `env()` isn't supported the
+     `max()` declaration below is dropped as invalid, and without this the
+     whole rule would leave main with no bottom padding at all. */
   .pb-tabbar {
+    padding-bottom: 6.5rem;
     padding-bottom: max(6.5rem, calc(env(safe-area-inset-bottom) + 6rem));
   }
 

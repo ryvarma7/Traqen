@@ -267,7 +267,11 @@ export default async function HubPage({
 
         <CalendarTimeline eventsByDate={Object.fromEntries(groupByDate(events))} />
 
-        <div className="grid gap-4 md:grid-cols-2 md:items-start">
+        {/* `minmax(0,1fr)` is load-bearing: the default implicit `auto` column
+            is floored at its items' min-content, and a `truncate` span is
+            `white-space: nowrap`, so its min-content is the full unwrapped
+            text. That floor pushed the column wider than the phone viewport. */}
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2 md:items-start">
           <TasksPanel tasks={openTasks} />
           <ApplicationsPanel jobs={hubJobs} hackathons={hubHackathons} />
         </div>
