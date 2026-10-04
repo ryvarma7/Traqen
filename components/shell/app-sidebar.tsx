@@ -21,15 +21,18 @@ export function AppSidebar() {
   return (
     <aside className="hidden md:flex md:w-60 md:shrink-0 md:flex-col lg:w-64">
       <div className="sticky top-0 flex h-dvh flex-col px-3 py-5">
-        {/* Brand */}
-        <div className="mb-6 px-1">
-          <Link href="/" className="transition-opacity hover:opacity-80">
+        {/* Brand. The box is pinned to the ORIGINAL 32px height and the logo is
+            centred inside it at 44px, so it renders larger while overflowing
+            equally top and bottom. The layout footprint never changes, which
+            is what keeps the nav below sitting exactly where it did. */}
+        <div className="mb-6 flex h-8 items-center px-1">
+          <Link href="/" className="flex items-center transition-opacity hover:opacity-80">
             <Image
               src="/logo-main.svg"
               alt="Traqen"
               width={244}
               height={110}
-              className="h-8 w-auto"
+              className="h-11 w-auto"
               unoptimized
               priority
             />

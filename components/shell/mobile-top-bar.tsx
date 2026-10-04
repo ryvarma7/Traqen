@@ -10,14 +10,17 @@ import { ProfileMenu } from "@/components/shell/profile-menu";
  */
 export function MobileTopBar() {
   return (
-    <div className="mb-5 flex items-center justify-between gap-2 md:hidden">
-      <Link href="/" className="transition-opacity hover:opacity-80">
+    /* Fixed 40px row (the ProfileMenu button's height, unchanged) with the
+       logo centred inside it at 44px. It overflows 2px top and bottom rather
+       than growing the row, so nothing below this bar shifts. */
+    <div className="mb-5 flex h-10 items-center justify-between gap-2 md:hidden">
+      <Link href="/" className="flex items-center transition-opacity hover:opacity-80">
         <Image
           src="/logo-main.svg"
           alt="Traqen"
           width={244}
           height={110}
-          className="h-9 w-auto"
+          className="h-11 w-auto"
           unoptimized
           priority
         />
