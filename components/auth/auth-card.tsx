@@ -14,8 +14,12 @@ export function AuthCard({
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-black px-4 py-10">
       <AuthBackground />
       <div className="relative w-full max-w-[400px]">
-        {/* Logo — already white artwork on transparent ground */}
-        <div className="mb-10 mt-2 flex justify-center">
+        {/* Logo — already white artwork on transparent ground.
+            The block below is vertically centred, so this top margin is what
+            sets how high the wordmark sits: adding to it grows the block
+            upward, so the composition settles lower. `mt-12` drops the logo
+            and card about 20px versus the old `mt-2`. */}
+        <div className="mb-10 mt-12 flex justify-center">
           <Image
             src="/logo-main.svg"
             alt="Traqen"
