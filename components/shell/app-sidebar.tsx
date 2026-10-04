@@ -21,10 +21,12 @@ export function AppSidebar() {
   return (
     <aside className="hidden md:flex md:w-60 md:shrink-0 md:flex-col lg:w-64">
       <div className="sticky top-0 flex h-dvh flex-col px-3 py-5">
-        {/* Brand. The box is pinned to the ORIGINAL 32px height and the logo is
-            centred inside it at 44px, so it renders larger while overflowing
-            equally top and bottom. The layout footprint never changes, which
-            is what keeps the nav below sitting exactly where it did. */}
+        {/* Brand. The box stays pinned at 32px and the logo is centred inside it, so
+            it renders larger while overflowing equally top and bottom — the
+            layout footprint never changes, which keeps the nav below sitting
+            exactly where it did. 56px is the ceiling while the box and its
+            24px gap are unchanged: any taller and the wordmark collides with
+            the first nav item. */}
         <div className="mb-6 flex h-8 items-center px-1">
           <Link href="/" className="flex items-center transition-opacity hover:opacity-80">
             <Image
@@ -32,7 +34,7 @@ export function AppSidebar() {
               alt="Traqen"
               width={244}
               height={110}
-              className="h-11 w-auto"
+              className="h-14 w-auto"
               unoptimized
               priority
             />
