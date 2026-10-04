@@ -15,11 +15,16 @@ export function AuthCard({
       <AuthBackground />
       <div className="relative w-full max-w-[400px]">
         {/* Logo — already white artwork on transparent ground.
-            The block below is vertically centred, so this top margin is what
-            sets how high the wordmark sits: adding to it grows the block
-            upward, so the composition settles lower. `mt-12` drops the logo
-            and card about 20px versus the old `mt-2`. */}
-        <div className="mb-10 mt-12 flex justify-center">
+            The block below is vertically centred, so both margins feed into
+            where the logo and the card land:
+              logo top = K + (mt - mb) / 2
+              card top = K + (mt + mb) / 2
+            Raising mt by N while dropping mb by the same N therefore moves
+            the logo down by N and leaves the card exactly where it was.
+            mb-10/mt-2 (N=0, card baseline) -> mb-6/mt-6 (N=16): the logo
+            sits 16px lower, the card does not move, and the gap between
+            them tightens from 40px to 24px. */}
+        <div className="mb-6 mt-6 flex justify-center">
           <Image
             src="/logo-main.svg"
             alt="Traqen"
