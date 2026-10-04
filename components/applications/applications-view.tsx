@@ -25,6 +25,7 @@ import {
   saveHackathonNotes,
   saveJobApplicationNotes,
 } from "@/lib/actions/applications";
+import { useCreateShortcut, usePendingCreate } from "@/lib/create-bus";
 import { daysUntil } from "@/lib/dates";
 import { DEFAULT_OPTIONS, optionsForField } from "@/lib/defaults";
 import { haptics } from "@/lib/haptics";
@@ -137,6 +138,10 @@ export function ApplicationsView({
     setSheet({ open: false, editing: null });
     setExpandedId(null);
   };
+
+  // The mobile tab bar's "+" and the hub's quick-action pill both land here.
+  useCreateShortcut(() => setSheet({ open: true, editing: null }));
+  usePendingCreate(() => setSheet({ open: true, editing: null }));
 
   /** Notes-only save routed to the right table for this row. */
   const saveNotesFor =

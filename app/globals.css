@@ -2,6 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══ DESIGN TOKENS ═══════════════════════════════════════════════════════
+ * Single source of truth. Every colour, radius and type step below is drawn
+ * from the existing palette in tailwind.config.ts — no value here is new.
+ *
+ * Elevation is tonal, not outlined: a card is one step lighter than the
+ * surface it sits on, separated by a #1A1A1A hairline that reads as a
+ * shadow edge rather than an outline.
+ *   base #000000 → surface #0B0B0B (sidebar) → card #111111 (panels)
+ */
+:root {
+  /* Surfaces */
+  --color-bg:       #000000;
+  --color-surface:  #0B0B0B;
+  --color-card:     #111111;
+  --color-card-hover: #141414;
+  --color-hairline: #1A1A1A;
+
+  /* Text */
+  --color-fg:     #FFFFFF;
+  --color-muted:  #C4C4C4;
+
+  /* Semantics — hue only where meaning needs it */
+  --color-success: #51CF66;
+  --color-danger:  #FF6B6B;
+  --color-warning: #FFD43B;
+  --color-info:    #4DABF7;
+
+  /* Radii — kept in sync with tailwind.config.ts borderRadius */
+  --radius-card:  16px;
+  --radius-field: 10px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+}
+
 /* ─── Film grain — subtle noise over the whole scene ─────────────────────── */
 body::before {
   content: "";
@@ -61,7 +98,6 @@ body:has(.app-scene)::after {
     background: rgba(255, 255, 255, 0.09);
     border-color: rgba(255, 255, 255, 0.28);
     box-shadow: 0 4px 14px -3px rgba(0, 0, 0, 0.50);
-    transform: translateY(-0.5px);
   }
   .glass-btn-outline:active:not(:disabled) {
     transform: translateY(0.5px) scale(0.98);
@@ -78,7 +114,6 @@ body:has(.app-scene)::after {
     background: #F5F5F5;
     border-color: #F5F5F5;
     box-shadow: 0 4px 14px -3px rgba(255, 255, 255, 0.20);
-    transform: translateY(-0.5px);
   }
   .glass-btn-primary:active:not(:disabled) {
     transform: translateY(0.5px) scale(0.98);
@@ -108,42 +143,40 @@ body:has(.app-scene)::after {
     box-shadow:
       0 2px 4px 0 rgba(176, 37, 37, 0.4),
       0 8px 20px -4px rgba(224, 49, 49, 0.35);
-    transform: translateY(-0.5px);
   }
 
   /* ─── Tiles & Cards ──────────────────────────────────────────────────────── */
+  /* Card surface is #111111 — one tonal step above the #0B0B0B shell behind
+     it. The #1A1A1A hairline is deliberately close to the card tone so it
+     reads as an edge, not an outline. */
   .glass-tile {
-    background: #0B0B0B;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow:
-      0 1px 3px 0 rgba(0, 0, 0, 0.50),
-      inset 0 1px 0 rgba(255, 255, 255, 0.04);
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    background: var(--color-card);
+    border: 1px solid var(--color-hairline);
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.40);
+    transition: background var(--duration-fast) var(--ease-out),
+                border-color var(--duration-fast) var(--ease-out);
   }
   .glass-tile-hover:hover {
-    border-color: rgba(255, 255, 255, 0.25);
-    box-shadow:
-      0 10px 28px -6px rgba(0, 0, 0, 0.60),
-      0 3px 8px 0 rgba(0, 0, 0, 0.40),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    transform: translateY(-1px);
+    background: var(--color-card-hover);
+    border-color: #242424;
   }
 
   /* ─── Sections & Containers ──────────────────────────────────────────────── */
   .glass-section {
-    background: #0B0B0B;
-    border: 1px solid rgba(255, 255, 255, 0.10);
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.40);
+    background: var(--color-card);
+    border: 1px solid var(--color-hairline);
+    box-shadow: none;
   }
 
   /* ─── Sheets & Modals ───────────────────────────────────────────────────── */
+  /* Sits one tonal step above a card (#111111 → #141414) so it reads as the
+     topmost layer without needing a heavier fill. */
   .glass-modal {
-    background: #0B0B0B;
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: #141414;
+    border: 1px solid #1A1A1A;
     box-shadow:
       0 24px 60px -12px rgba(0, 0, 0, 0.70),
-      0 10px 24px -6px rgba(0, 0, 0, 0.50),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      0 10px 24px -6px rgba(0, 0, 0, 0.50);
   }
 
   /* ─── Input Fields ───────────────────────────────────────────────────────── */
@@ -163,6 +196,90 @@ body:has(.app-scene)::after {
   /* ─── Accent left-border strip (used in attention strip, notes) ─────────── */
   .accent-strip {
     border-left: 3px solid #FFFFFF;
+  }
+
+  /* ═══ DASHBOARD PRIMITIVES ═══════════════════════════════════════════════
+   * The pieces the reference layout is built from. Kept here rather than as
+   * utility soup so the hub, the sidebar and the mobile bar stay in sync.
+   */
+
+  /* Large self-contained dashboard card — Notes / Calendar / Tasks panels. */
+  .panel {
+    background: var(--color-card);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+  }
+
+  /* Pill-shaped quick action: icon + label, subtle surface fill. */
+  .pill-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.4375rem 0.875rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--color-fg);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background var(--duration-fast) var(--ease-out),
+                border-color var(--duration-fast) var(--ease-out);
+  }
+  .pill-btn:hover {
+    background: rgba(255, 255, 255, 0.10);
+    border-color: rgba(255, 255, 255, 0.22);
+  }
+
+  /* Sidebar / bottom-bar nav row. Active state is a quiet filled surface
+     plus brighter text — no accent colour, no underline. */
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.5rem 0.625rem;
+    border-radius: var(--radius-field);
+    color: var(--color-muted);
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background var(--duration-fast) var(--ease-out),
+                color var(--duration-fast) var(--ease-out);
+  }
+  .nav-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-fg);
+  }
+  .nav-item[data-active="true"] {
+    background: rgba(255, 255, 255, 0.09);
+    color: var(--color-fg);
+  }
+
+  /* Visible but understated keyboard focus. Uses outline rather than
+     box-shadow so it composes with the elevation shadows instead of
+     replacing them. */
+  .nav-item:focus-visible,
+  .pill-btn:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.85);
+    outline-offset: 2px;
+  }
+
+  /* Calendar event chip: translucent tinted body + 3px source bar on the left,
+     so a row is identified by colour without a heavy border. */
+  .event-tinted {
+    position: relative;
+    border-radius: var(--radius-field);
+    border-left: 3px solid var(--event-color, var(--color-fg));
+    background: color-mix(in srgb, var(--event-color, #FFFFFF) 12%, transparent);
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+  .event-tinted:hover {
+    background: color-mix(in srgb, var(--event-color, #FFFFFF) 20%, transparent);
+  }
+
+  /* Bottom fade on note preview cards — replaces a hard text cut. */
+  .fade-bottom {
+    -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
   }
 
   /* ─── Monochrome auth (black surface, white text) ───────────────────────── */
@@ -188,7 +305,6 @@ body:has(.app-scene)::after {
     background: #F5F5F5;
     border-color: #F5F5F5;
     box-shadow: 0 4px 14px -3px rgba(255, 255, 255, 0.20);
-    transform: translateY(-0.5px);
   }
   .auth-btn-primary:active:not(:disabled) {
     transform: translateY(0.5px) scale(0.98);
@@ -214,6 +330,20 @@ body:has(.app-scene)::after {
   }
   .fab-right {
     right: max(1rem, env(safe-area-inset-right) + 0.75rem);
+  }
+
+  /* Translucent floating tab bar (mobile). Translucent + blur so the content
+     scrolling underneath stays faintly visible, as in the reference. */
+  .bottom-bar {
+    background: rgba(17, 17, 17, 0.82);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+
+  /* Clear the floating tab bar so the last row is never trapped under it. */
+  .pb-tabbar {
+    padding-bottom: max(6.5rem, calc(env(safe-area-inset-bottom) + 6rem));
   }
 
   /* Safe-area bottom padding for sheets/modals */

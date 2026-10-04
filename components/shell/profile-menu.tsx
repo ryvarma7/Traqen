@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { LogOut, PenLine } from "lucide-react";
+import { ChevronUp, LogOut, PenLine } from "lucide-react";
 import { logOut } from "@/lib/actions/auth";
 import { haptics } from "@/lib/haptics";
 import { useIsMobile } from "@/lib/hooks";
@@ -19,13 +19,20 @@ function avatarLabel(name: string | null) {
   return (first + (parts.length > 1 ? last : "")).toUpperCase();
 }
 
-/** Round profile button in the top bar — tap to open the profile menu.
- *  Desktop: dropdown panel under the avatar. Mobile: bottom sheet. */
-export function ProfileMenu() {
+/** Round profile button — tap to open the profile menu.
+ *
+ *  Two presentations, sharing one set of open/close state:
+ *  - `icon` (default): a circular monogram for the mobile top bar.
+ *  - `rail`: a full-width row showing the whole username, pinned to the
+ *    bottom of the desktop sidebar. Its panel opens UPWARD, because there is
+ *    no room below the bottom edge of the viewport.
+ */
+export function ProfileMenu({ variant = "icon" }: { variant?: "icon" | "rail" }) {
   const { username, email, openRename } = useProfile();
   const isMobile = useIsMobile();
   const [open, setOpen] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement>(null);
+  const isRail = variant === "rail";
 
   React.useEffect(() => {
     if (!open) return;
@@ -50,7 +57,7 @@ export function ProfileMenu() {
   const close = React.useCallback(() => setOpen(false), []);
 
   return (
-    <div className="relative" ref={rootRef}>
+    <div className={cn("relative", isRail && "w-full")} ref={rootRef}>
       <motion.button
         whileTap={{ scale: 0.97 }}
         onTap={() => haptics.tap()}
@@ -58,10 +65,37 @@ export function ProfileMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        aria-label="Profile menu"
-        className="flex h-10 w-10 select-none items-center justify-center rounded-full border border-white/15 bg-white/5 text-sm font-semibold text-foreground transition-all hover:border-white/30 hover:bg-white/10 md:h-9 md:w-9"
+        aria-label={isRail ? `Profile menu for ${username ?? "user"}` : "Profile menu"}
+        className={cn(
+          "select-none transition-all",
+          isRail
+            ? "focus-ring flex w-full items-center gap-2.5 rounded-field px-2 py-2 text-left hover:bg-white/[0.06]"
+            : "flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-sm font-semibold text-foreground hover:border-white/30 hover:bg-white/10 md:h-9 md:w-9"
+        )}
       >
-        {avatarLabel(username)}
+        <span
+          className={cn(
+            "flex shrink-0 items-center justify-center rounded-full bg-white/10 font-semibold text-foreground",
+            isRail ? "h-7 w-7 text-xs" : "h-full w-full text-sm"
+          )}
+        >
+          {avatarLabel(username)}
+        </span>
+
+        {isRail && (
+          <>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+              {username ?? "Profile"}
+            </span>
+            <ChevronUp
+              className={cn(
+                "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
+                open && "rotate-180"
+              )}
+              strokeWidth={1.75}
+            />
+          </>
+        )}
       </motion.button>
 
       {!isMobile && (
@@ -72,7 +106,14 @@ export function ProfileMenu() {
               animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
               exit={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="glass-modal absolute right-0 top-full z-50 mt-2 w-72 origin-top-right overflow-hidden rounded-card"
+              className={cn(
+                "glass-modal absolute z-50 overflow-hidden rounded-card",
+                // Rail is pinned to the bottom of the viewport, so the panel
+                // grows upward from it; the icon variant has room below.
+                isRail
+                  ? "bottom-full left-0 right-0 mb-1.5 w-full origin-bottom-left"
+                  : "right-0 top-full mt-2 w-72 origin-top-right"
+              )}
             >
               <MenuItems username={username} email={email} onClose={close} onRename={openRename} />
             </motion.div>

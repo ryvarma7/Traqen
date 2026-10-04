@@ -18,6 +18,7 @@ import { CountdownPill } from "@/components/shared/countdown-pill";
 import { PriorityPill } from "@/components/shared/priority-pill";
 import { TaskForm, type LinkableItem } from "@/components/tasks/task-form";
 import { setTaskStatus } from "@/lib/actions/tasks";
+import { useCreateShortcut, usePendingCreate } from "@/lib/create-bus";
 import { daysUntil } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
 import { priorityRank } from "@/lib/priority";
@@ -105,6 +106,14 @@ export function TasksView({
 
   const closeSheet = () =>
     setSheet({ open: false, editing: null, preset: "To do" });
+
+  // The mobile tab bar's "+" and the hub's quick-action pill both land here.
+  useCreateShortcut(() =>
+    setSheet({ open: true, editing: null, preset: "To do" })
+  );
+  usePendingCreate(() =>
+    setSheet({ open: true, editing: null, preset: "To do" })
+  );
 
   const moveTask = async (task: Task, status: Task["status"]) => {
     const result = await setTaskStatus(task.id, status);

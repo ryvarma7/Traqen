@@ -4,39 +4,25 @@ import * as React from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { sourceDot, sourceLabel, type CalendarEvent } from "@/lib/calendar";
-import { dateKey } from "@/lib/calendar";
+import {
+  dateKey,
+  formatMonthLabel,
+  monthCells,
+  sourceDot,
+  sourceLabel,
+  type CalendarEvent,
+} from "@/lib/calendar";
 import { haptics } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MAX_DOTS = 3;
 
-type MonthCell = {
-  key: string;
-  day: number;
-  inMonth: boolean;
-};
-
 function formatCalendarDate(key: string, options: Intl.DateTimeFormatOptions) {
   const [year, month, day] = key.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-US", {
     ...options,
     timeZone: "UTC",
-  });
-}
-
-/** Six-week (42-cell) month grid starting on Sunday. */
-function monthCells(year: number, month: number): MonthCell[] {
-  const first = new Date(year, month, 1);
-  const start = new Date(year, month, 1 - first.getDay());
-  return Array.from({ length: 42 }, (_, i) => {
-    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
-    return {
-      key: dateKey(d),
-      day: d.getDate(),
-      inMonth: d.getMonth() === month,
-    };
   });
 }
 
@@ -55,11 +41,7 @@ export function CalendarView({
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
   const cells = monthCells(year, month);
-  const monthLabel = new Date(Date.UTC(year, month, 1)).toLocaleDateString("en-US", {
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  });
+  const monthLabel = formatMonthLabel(year, month);
 
   const move = (delta: number) =>
     setCursor((c) => new Date(c.getFullYear(), c.getMonth() + delta, 1));

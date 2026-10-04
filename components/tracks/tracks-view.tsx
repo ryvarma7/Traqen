@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { ImportTrackModal } from "@/components/tracks/import-track-modal";
 import { FabPlus } from "@/components/shared/fab-plus";
 import { deleteTrack } from "@/lib/actions/tracks";
+import { useCreateShortcut, usePendingCreate } from "@/lib/create-bus";
 import { formatShortDate } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,10 @@ const STATUS_TONES: Record<TrackSummary["status"], string> = {
 
 export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
   const [importOpen, setImportOpen] = React.useState(false);
+
+  // The mobile tab bar's "+" and the hub's quick-action pill both land here.
+  useCreateShortcut(() => setImportOpen(true));
+  usePendingCreate(() => setImportOpen(true));
 
   const remove = async (id: string, title: string) => {
     if (!window.confirm(`Delete "${title}" and all its steps? This can't be undone.`)) return;
@@ -92,7 +97,7 @@ export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
             const pct = track.total > 0 ? Math.round((track.done / track.total) * 100) : 0;
             return (
               <motion.div key={track.id} variants={cardVariants} className="h-full">
-                <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.985 }} className="group relative h-full">
+                <motion.div whileTap={{ scale: 0.985 }} className="group relative h-full">
                   <Link
                     href={`/tracks/${track.id}`}
                     className="flex h-full flex-col rounded-card glass-tile glass-tile-hover p-5"

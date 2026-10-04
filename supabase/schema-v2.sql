@@ -41,53 +41,59 @@ drop function if exists public.get_email_for_username(text);
 -- Username is derived from the Google account's email local part. The real
 -- Google email never leaves auth.users — the UI only ever sees the username.
 -- Usernames are display names, not identifiers, so they aren't unique.
+--
+-- search_path is pinned to '' because this is SECURITY DEFINER: an empty path
+-- means no object in any schema can be substituted for an unqualified name
+-- here, closing the classic search_path hijack. Every reference is qualified.
+-- Keep this body identical to the one in schema.sql — re-running this file
+-- replaces the deployed function, so the two must not drift apart again.
 create or replace function public.ensure_profile()
 returns text
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
-  uid uuid := auth.uid();
-  google_email text;
-  base_username text;
-  candidate text;
+  v_uid uuid := auth.uid();
+  v_email text;
+  v_base text;
+  v_candidate text;
 begin
-  if uid is null then
+  if v_uid is null then
     return null;
   end if;
 
-  if exists (select 1 from public.profiles where id = uid) then
+  if exists (select 1 from public.profiles p where p.id = v_uid) then
     return null;
   end if;
 
-  select email into google_email from auth.users where id = uid;
-  if google_email is null then
+  select u.email into v_email from auth.users u where u.id = v_uid;
+  if v_email is null then
     return null;
   end if;
 
-  base_username := regexp_replace(lower(split_part(google_email, '@', 1)), '[^a-z0-9_-]', '', 'g');
-  base_username := left(base_username, 20);
-  if base_username = '' or length(base_username) < 3 then
-    base_username := 'user';
+  v_base := regexp_replace(lower(split_part(v_email, '@', 1)), '[^a-z0-9_-]', '', 'g');
+  v_base := left(v_base, 20);
+  if v_base = '' or length(v_base) < 3 then
+    v_base := 'user';
   end if;
 
-  -- No unique constraint anymore, so no suffix loop needed. The only real
-  -- collision is the same email local part twice (same per-user row already
-  -- returned above); a random suffix is a belt-and-braces fallback.
-  candidate := base_username;
+  -- No unique constraint on username, so there is nothing to collide with. The
+  -- exception branch is belt-and-braces only: the primary key on id is always
+  -- fresh for a brand-new account.
+  v_candidate := v_base;
   begin
     insert into public.profiles (id, username, email_internal, auth_provider)
-    values (uid, candidate, google_email, 'google');
-    return candidate;
+    values (v_uid, v_candidate, v_email, 'google');
+    return v_candidate;
   exception when unique_violation then
     null;
   end;
 
-  candidate := base_username || floor(random() * 9000 + 1000)::int::text;
+  v_candidate := v_base || floor(random() * 9000 + 1000)::int::text;
   insert into public.profiles (id, username, email_internal, auth_provider)
-  values (uid, candidate, google_email, 'google');
-  return candidate;
+  values (v_uid, v_candidate, v_email, 'google');
+  return v_candidate;
 end;
 $$;
 

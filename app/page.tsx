@@ -1,17 +1,33 @@
 import { redirect } from "next/navigation";
-import { AttentionStrip, type AttentionItem } from "@/components/hub/attention-strip";
-import { NavCards, type HubCard } from "@/components/hub/nav-cards";
+import { ApplicationsPanel, type HubApplication } from "@/components/hub/applications-panel";
+import {
+  AttentionStrip,
+  type AttentionDate,
+  type AttentionItem,
+} from "@/components/hub/attention-strip";
+import { CalendarTimeline } from "@/components/hub/calendar-timeline";
+import { HubHeader } from "@/components/hub/hub-header";
+import { NameEntryGate } from "@/components/hub/name-entry-gate";
+import { NotesCarousel, type NotePreview } from "@/components/hub/notes-carousel";
+import { TasksPanel, type HubTask } from "@/components/hub/tasks-panel";
 import { PageTransition } from "@/components/shell/page-transition";
 import { PostLoginLoader } from "@/components/shell/post-login-loader";
-import { NameEntryGate } from "@/components/hub/name-entry-gate";
-import { createClient } from "@/lib/supabase/server";
+import { buildCalendarEvents, groupByDate } from "@/lib/calendar";
 import { daysUntil } from "@/lib/dates";
+import { createClient } from "@/lib/supabase/server";
 import {
   ACTIVE_HACKATHON_STATUSES,
   ACTIVE_JOB_STATUSES,
 } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+/** Chip captions, keyed by the role that drives the countdown wording. */
+const DATE_LABEL: Record<AttentionDate["role"], string> = {
+  deadline: "Deadline",
+  follow_up: "Follow-up",
+  due: "Due",
+};
 
 const GREETINGS = [
   "What's on track",
@@ -56,17 +72,33 @@ export default async function HubPage({
 
   // Auth check runs in parallel with the reads — the queries don't need
   // user.id because RLS already scopes every table to auth.uid().
-  const [userRes, profileRes, jobsRes, hackathonsRes, tasksRes, notesRes, tracksRes, trackItemsRes] =
-    await Promise.all([
-      supabase.auth.getUser(),
-      supabase.from("profiles").select("username, preferences").single(),
-      supabase.from("job_applications").select("id, company, status, deadline, follow_up_date"),
-      supabase.from("hackathons").select("id, hackathon_name, status, deadline, follow_up_date"),
-      supabase.from("tasks").select("id, title, status, due_date"),
-      supabase.from("notes").select("id", { count: "exact", head: true }),
-      supabase.from("learning_tracks").select("id, title, status"),
-      supabase.from("track_items").select("id, track_id, title, status, target_date"),
-    ]);
+  const [
+    userRes,
+    profileRes,
+    jobsRes,
+    hackathonsRes,
+    tasksRes,
+    notesRes,
+    tracksRes,
+    trackItemsRes,
+  ] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.from("profiles").select("username, preferences").single(),
+    supabase
+      .from("job_applications")
+      .select("id, company, role_type, status, deadline, follow_up_date"),
+    supabase
+      .from("hackathons")
+      .select("id, hackathon_name, round_detail, status, start_date, deadline, follow_up_date"),
+    supabase.from("tasks").select("id, title, status, due_date"),
+    supabase
+      .from("notes")
+      .select("id, title, content, color, pinned, updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(24),
+    supabase.from("learning_tracks").select("id, title, status"),
+    supabase.from("track_items").select("id, track_id, title, status, target_date"),
+  ]);
 
   if (!userRes.data.user) redirect("/login");
 
@@ -85,117 +117,168 @@ export default async function HubPage({
   const jobs = jobsRes.data ?? [];
   const hackathons = hackathonsRes.data ?? [];
   const tasks = tasksRes.data ?? [];
-  const notesCount = notesRes.count ?? 0;
+  const notes = (notesRes.data ?? []) as NotePreview[];
   const tracks = tracksRes.data ?? [];
   const trackItems = trackItemsRes.data ?? [];
   const trackTitles = new Map(tracks.map((t) => [t.id, t.title]));
 
-  // Collect upcoming deadlines and follow-ups across all sections,
-  // keep only items within 14 days (or overdue), nearest first.
+  // ── Needs attention ──────────────────────────────────────────────────────
+  // One entry per entity, not per date: a company carrying both a deadline and
+  // a follow-up is a single card with two chips. Only dates that still matter
+  // for the row's current status are kept — a deadline is history once you've
+  // applied, and a rejected or withdrawn row is dropped entirely — so the
+  // strip is a triage list instead of a mirror of every date column.
+  const HORIZON_DAYS = 14;
   const candidates: AttentionItem[] = [];
-  const push = (
+
+  const add = (
     id: string,
     href: string,
     title: string,
-    meta: string,
-    date: string | null
+    subtitle: string | null,
+    kind: string,
+    status: string,
+    dates: Omit<AttentionDate, "label">[]
   ) => {
-    if (!date) return;
-    const days = daysUntil(date);
-    if (days > 14) return;
-    candidates.push({ id, href, title, meta, date });
+    const within = dates.filter(
+      (d) => d.date !== null && daysUntil(d.date) <= HORIZON_DAYS
+    );
+    if (within.length === 0) return;
+    const labelled: AttentionDate[] = within.map((d) => ({
+      ...d,
+      label: DATE_LABEL[d.role],
+    }));
+    const earliest = labelled.reduce((min, d) => (d.date < min ? d.date : min), labelled[0].date);
+    candidates.push({ id, href, title, subtitle, kind, status, dates: labelled, earliest });
   };
 
   for (const job of jobs) {
-    push(job.id, "/applications", job.company, "Job · deadline", job.deadline);
-    push(job.id, "/applications", job.company, "Job · follow-up", job.follow_up_date);
+    if (!ACTIVE_JOB_STATUSES.has(job.status)) continue;
+    // Saved means not applied yet, so the deadline is what matters. Once
+    // applied, only the follow-up is actionable.
+    const dates =
+      job.status === "Saved"
+        ? [{ date: job.deadline, role: "deadline" as const }]
+        : [{ date: job.follow_up_date, role: "follow_up" as const }];
+    add(job.id, "/applications", job.company, job.role_type, "Job", job.status, dates);
   }
+
   for (const h of hackathons) {
-    push(h.id, "/applications", h.hackathon_name, "Hackathon · deadline", h.deadline);
-    push(h.id, "/applications", h.hackathon_name, "Hackathon · follow-up", h.follow_up_date);
+    if (!ACTIVE_HACKATHON_STATUSES.has(h.status)) continue;
+    const dates =
+      h.status === "Saved"
+        ? [{ date: h.deadline, role: "deadline" as const }]
+        : [{ date: h.follow_up_date, role: "follow_up" as const }];
+    add(
+      h.id,
+      "/applications",
+      h.hackathon_name,
+      h.round_detail,
+      "Hackathon",
+      h.status,
+      dates
+    );
   }
+
   for (const t of tasks) {
     if (t.status !== "Done") {
-      push(t.id, "/tasks", t.title, "Task · due", t.due_date);
+      add(t.id, "/tasks", t.title, null, "Task", t.status, [
+        { date: t.due_date, role: "due" },
+      ]);
     }
   }
+
   for (const item of trackItems) {
     if (item.status !== "Done") {
-      // Key on the step's own id — track_id repeats for every step in a track,
-      // which collided whenever two steps shared a target_date.
-      push(
+      add(
         item.id,
         `/tracks/${item.track_id}`,
         `${trackTitles.get(item.track_id) ?? "Track"} · ${item.title}`,
+        null,
         "Course step",
-        item.target_date
+        item.status,
+        [{ date: item.target_date, role: "due" }]
       );
     }
   }
 
-  candidates.sort((a, b) => daysUntil(a.date) - daysUntil(b.date));
-  const attention = candidates.slice(0, 5);
+  candidates.sort((a, b) => (a.earliest < b.earliest ? -1 : 1));
+  const attention = candidates.slice(0, 6);
 
-  const activeJobs = jobs.filter((j) => ACTIVE_JOB_STATUSES.has(j.status)).length;
-  const activeHackathons = hackathons.filter((h) =>
-    ACTIVE_HACKATHON_STATUSES.has(h.status)
-  ).length;
-  const activeTasks = tasks.filter((t) => t.status !== "Done").length;
-  const activeTracks = tracks.filter((t) => t.status === "In progress").length;
+  // ── Calendar timeline ────────────────────────────────────────────────────
+  const events = buildCalendarEvents({
+    tasks,
+    jobs: jobs.map((j) => ({
+      id: j.id,
+      company: j.company,
+      status: j.status,
+      deadline: j.deadline,
+      follow_up_date: j.follow_up_date,
+    })),
+    hackathons: hackathons.map((h) => ({
+      id: h.id,
+      hackathon_name: h.hackathon_name,
+      status: h.status,
+      start_date: h.start_date,
+      deadline: h.deadline,
+      follow_up_date: h.follow_up_date,
+    })),
+    trackItems: trackItems.map((i) => ({
+      track_id: i.track_id,
+      title: i.title,
+      status: i.status,
+      target_date: i.target_date,
+    })),
+    trackTitles,
+  });
 
-  const cards: HubCard[] = [
-    {
-      href: "/applications",
-      title: "Applications",
-      description: "Jobs and hackathons you're tracking.",
-      count: activeJobs + activeHackathons,
-      countLabel: "active",
-      icon: "briefcase",
-    },
-    {
-      href: "/tasks",
-      title: "Tasks",
-      description: "Everything you need to get done.",
-      count: activeTasks,
-      countLabel: "open",
-      icon: "tasks",
-    },
-    {
-      href: "/notes",
-      title: "Notes",
-      description: "Ideas, prep, and things to remember.",
-      count: notesCount,
-      countLabel: notesCount === 1 ? "note" : "notes",
-      icon: "notes",
-    },
-    {
-      href: "/tracks",
-      title: "Course Tracker",
-      description: "AI-planned learning tracks, checked off step by step.",
-      count: activeTracks,
-      countLabel: activeTracks === 1 ? "active track" : "active tracks",
-      icon: "tracks",
-    },
-  ];
+  // ── Two-column row ───────────────────────────────────────────────────────
+  const openTasks: HubTask[] = tasks
+    .filter((t) => t.status !== "Done")
+    .sort((a, b) => daysUntil(a.due_date ?? "2999-12-31") - daysUntil(b.due_date ?? "2999-12-31"))
+    .slice(0, 5);
+
+  const hubJobs: HubApplication[] = jobs
+    .filter((j) => ACTIVE_JOB_STATUSES.has(j.status))
+    .map((j) => ({ id: j.id, title: j.company, status: j.status, date: j.deadline ?? j.follow_up_date }))
+    .sort(bySoonest);
+
+  const hubHackathons: HubApplication[] = hackathons
+    .filter((h) => ACTIVE_HACKATHON_STATUSES.has(h.status))
+    .map((h) => ({
+      id: h.id,
+      title: h.hackathon_name,
+      status: h.status,
+      date: h.deadline ?? h.follow_up_date,
+    }))
+    .sort(bySoonest);
 
   return (
     <>
       <PostLoginLoader initiallyActive={justSignedIn === "1"} />
       <PageTransition>
         <NameEntryGate needsName={needsName} />
-        <div className="mb-8 md:mb-10">
-          <p className="text-[20px] md:text-[24px] font-semibold tracking-tight text-white">
-            {greeting}{" "}
-            {hasEnteredName && (
-              <span className="text-white/60 transition-opacity duration-300">
-                {username}
-              </span>
-            )}
-          </p>
-        </div>
+
+        <HubHeader greeting={greeting} name={hasEnteredName ? username : undefined} />
+
         <AttentionStrip items={attention} />
-        <NavCards cards={cards} />
+
+        <NotesCarousel notes={notes} />
+
+        <CalendarTimeline eventsByDate={Object.fromEntries(groupByDate(events))} />
+
+        <div className="grid gap-4 md:grid-cols-2 md:items-start">
+          <TasksPanel tasks={openTasks} />
+          <ApplicationsPanel jobs={hubJobs} hackathons={hubHackathons} />
+        </div>
       </PageTransition>
     </>
   );
+}
+
+/** Soonest first; undated rows sink to the bottom. */
+function bySoonest(a: HubApplication, b: HubApplication) {
+  if (!a.date) return 1;
+  if (!b.date) return -1;
+  return a.date < b.date ? -1 : 1;
 }

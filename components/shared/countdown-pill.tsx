@@ -5,9 +5,13 @@ import { cn } from "@/lib/utils";
  *  red = overdue/today, orange = 1–3 days, amber = 4–7, green/gray = 7+. */
 export function CountdownPill({
   date,
+  role = "deadline",
   className,
 }: {
   date: string;
+  /** A passed *deadline* is "overdue"; a passed *follow-up* is "late" —
+   *  you meant to check in and didn't. Same tone, different word. */
+  role?: "deadline" | "follow_up" | "due";
   className?: string;
 }) {
   const days = daysUntil(date);
@@ -15,7 +19,10 @@ export function CountdownPill({
   let label: string;
   let tone: string;
   if (days < 0) {
-    label = `${Math.abs(days)}d overdue`;
+    label =
+      role === "follow_up"
+        ? `${Math.abs(days)}d late`
+        : `${Math.abs(days)}d overdue`;
     tone = "bg-danger-soft/80 text-danger border-danger-border/70";
   } else if (days === 0) {
     label = "Today";

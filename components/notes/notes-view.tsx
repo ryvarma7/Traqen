@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { deleteNote, saveNote, setNotePrivacy } from "@/lib/actions/notes";
+import { useCreateShortcut, usePendingCreate } from "@/lib/create-bus";
 import { relativeTime } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
 import { useIsMobile } from "@/lib/hooks";
@@ -67,6 +68,10 @@ export function NotesView({ notes }: { notes: Note[] }) {
     setViewingId(null);
     setEditing(false);
   };
+
+  // The mobile tab bar's "+" and the hub's quick-action pill both land here.
+  useCreateShortcut(openNew);
+  usePendingCreate(openNew);
 
   const openNote = (note: Note) => {
     setTitle(note.title);

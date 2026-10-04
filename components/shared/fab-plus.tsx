@@ -6,7 +6,11 @@ import { motion } from "framer-motion";
 import { Plus } from "lucide-react";
 
 /**
- * Floating circular "+" add button.
+ * Floating circular "+" add button — desktop only.
+ *
+ * Below md the mobile tab bar carries its own "+" (it dispatches on the
+ * create bus, opening the same sheet), so this one steps aside rather than
+ * stacking a second floating control on top of the bar.
  *
  * Rendered through createPortal(document.body) so it escapes the transform /
  * filter containing block of PageTransition's <motion.main> — inside that
@@ -34,7 +38,7 @@ export function FabPlus({
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="glass-btn-base glass-btn-primary fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full shadow-lg md:bottom-6 md:right-6 lg:right-[max(2rem,calc((100vw-64rem)/2))]"
+      className="glass-btn-base glass-btn-primary fixed bottom-6 right-6 z-30 hidden h-14 w-14 items-center justify-center rounded-full shadow-lg md:flex lg:right-8"
     >
       <Plus className="h-6 w-6" />
     </motion.button>,

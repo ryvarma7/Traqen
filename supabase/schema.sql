@@ -30,84 +30,79 @@ alter table public.profiles drop constraint if exists profiles_username_key;
 drop policy if exists "Users can view own profile" on public.profiles;
 create policy "Users can view own profile"
   on public.profiles for select
-  using (auth.uid() = id);
+  using ((select auth.uid()) = id);
 
 drop policy if exists "Users can insert own profile" on public.profiles;
 create policy "Users can insert own profile"
   on public.profiles for insert
-  with check (auth.uid() = id);
+  with check ((select auth.uid()) = id);
 
 drop policy if exists "Users can update own profile" on public.profiles;
 create policy "Users can update own profile"
   on public.profiles for update
-  using (auth.uid() = id);
+  using ((select auth.uid()) = id);
 
--- Secure lookup used by the login form (username -> real email),
--- without exposing the profiles table to anonymous reads.
-create or replace function public.get_email_for_username(uname text)
-returns text
-language sql
-security definer
-set search_path = public
-as $$
-  select email_internal from public.profiles where username = lower(uname) limit 1;
-$$;
-
--- Google OAuth is the only sign-in method. Do not expose this legacy lookup:
--- it would allow anonymous username-to-email enumeration.
-revoke all on function public.get_email_for_username(text) from public, anon, authenticated;
+-- NOTE: the legacy username->email lookup (get_email_for_username) that used to
+-- live here is deliberately NOT created any more. It resolved a username to a
+-- real email address, which is exactly the enumeration risk Google-only auth
+-- removes by having no password flow to support. schema-v2.sql drops it on
+-- existing databases; a fresh install must never recreate it.
 
 -- First Google sign-in: create the profiles row if it doesn't exist yet.
 -- Username is derived from the Google account's email local part. The real
 -- Google email never leaves auth.users — the UI only ever sees the username.
 -- Usernames are display names, not identifiers, so they aren't unique.
+--
+-- search_path is pinned to '' because this is SECURITY DEFINER: an empty path
+-- means no object in any schema can be substituted for an unqualified name
+-- here, closing the classic search_path hijack. Every reference is qualified.
 create or replace function public.ensure_profile()
 returns text
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
-  uid uuid := auth.uid();
-  google_email text;
-  base_username text;
-  candidate text;
+  v_uid uuid := auth.uid();
+  v_email text;
+  v_base text;
+  v_candidate text;
 begin
-  if uid is null then
+  if v_uid is null then
     return null;
   end if;
 
-  if exists (select 1 from public.profiles where id = uid) then
+  if exists (select 1 from public.profiles p where p.id = v_uid) then
     return null;
   end if;
 
-  select email into google_email from auth.users where id = uid;
-  if google_email is null then
+  select u.email into v_email from auth.users u where u.id = v_uid;
+  if v_email is null then
     return null;
   end if;
 
-  base_username := regexp_replace(lower(split_part(google_email, '@', 1)), '[^a-z0-9_-]', '', 'g');
-  base_username := left(base_username, 20);
-  if base_username = '' or length(base_username) < 3 then
-    base_username := 'user';
+  v_base := regexp_replace(lower(split_part(v_email, '@', 1)), '[^a-z0-9_-]', '', 'g');
+  v_base := left(v_base, 20);
+  if v_base = '' or length(v_base) < 3 then
+    v_base := 'user';
   end if;
 
-  -- No unique constraint anymore, so no suffix loop needed. The only real
-  -- collision is the same email local part twice (same per-user row already
-  -- returned above); a random suffix is a belt-and-braces fallback.
-  candidate := base_username;
+  -- No unique constraint on username, so there is nothing to collide with. The
+  -- exception branch is belt-and-braces only: the primary key on id is always
+  -- fresh for a brand-new account.
+  v_candidate := v_base;
   begin
     insert into public.profiles (id, username, email_internal, auth_provider)
-    values (uid, candidate, google_email, 'google');
-    return candidate;
+    values (v_uid, v_candidate, v_email, 'google');
+    return v_candidate;
   exception when unique_violation then
     null;
   end;
 
-  candidate := base_username || floor(random() * 9000 + 1000)::int::text;
+  v_candidate := v_base || floor(random() * 9000 + 1000)::int::text;
   insert into public.profiles (id, username, email_internal, auth_provider)
-  values (uid, candidate, google_email, 'google');
-  return candidate;
+  values (v_uid, v_candidate, v_email, 'google');
+  return v_candidate;
 end;
 $$;
 
@@ -129,8 +124,8 @@ alter table public.dropdown_options enable row level security;
 drop policy if exists "Users manage own dropdown options" on public.dropdown_options;
 create policy "Users manage own dropdown options"
   on public.dropdown_options for all
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 
 -- Job applications
 create table if not exists public.job_applications (
@@ -161,8 +156,8 @@ alter table public.job_applications enable row level security;
 drop policy if exists "Users manage own job applications" on public.job_applications;
 create policy "Users manage own job applications"
   on public.job_applications for all
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 
 -- Hackathons / buildathons / competitions
 create table if not exists public.hackathons (
@@ -200,8 +195,8 @@ alter table public.hackathons enable row level security;
 drop policy if exists "Users manage own hackathons" on public.hackathons;
 create policy "Users manage own hackathons"
   on public.hackathons for all
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 
 -- Tasks (optionally linked to a job application or a hackathon)
 create table if not exists public.tasks (
@@ -224,8 +219,8 @@ alter table public.tasks enable row level security;
 drop policy if exists "Users manage own tasks" on public.tasks;
 create policy "Users manage own tasks"
   on public.tasks for all
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 
 -- Notes
 create table if not exists public.notes (
@@ -244,8 +239,8 @@ alter table public.notes enable row level security;
 drop policy if exists "Users manage own notes" on public.notes;
 create policy "Users manage own notes"
   on public.notes for all
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 
 -- ---------------------------------------------------------------------------
 -- Migration for existing databases: add notes to tasks.
@@ -281,8 +276,8 @@ alter table public.learning_tracks enable row level security;
 drop policy if exists "Users manage own learning tracks" on public.learning_tracks;
 create policy "Users manage own learning tracks"
   on public.learning_tracks for all
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 
 create table if not exists public.track_phases (
   id uuid primary key default uuid_generate_v4(),
@@ -297,8 +292,8 @@ alter table public.track_phases enable row level security;
 drop policy if exists "Users manage own track phases" on public.track_phases;
 create policy "Users manage own track phases"
   on public.track_phases for all
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 
 create table if not exists public.track_items (
   id uuid primary key default uuid_generate_v4(),
@@ -319,13 +314,23 @@ alter table public.track_items enable row level security;
 drop policy if exists "Users manage own track items" on public.track_items;
 create policy "Users manage own track items"
   on public.track_items for all
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 
--- Helpful indexes for the hub/dashboard aggregates.
+-- Indexes. Every RLS policy filters on user_id, so the per-user indexes are on
+-- the hot path of literally every query the app makes -- without them Postgres
+-- seq-scans the table and then discards rows the policy rejects. The track_id /
+-- phase_id indexes back the cascade deletes and the track detail page.
 create index if not exists idx_track_items_track_id on public.track_items(track_id);
 create index if not exists idx_track_phases_track_id on public.track_phases(track_id);
 create index if not exists idx_learning_tracks_user_id on public.learning_tracks(user_id);
+create index if not exists idx_job_applications_user_id on public.job_applications(user_id);
+create index if not exists idx_hackathons_user_id on public.hackathons(user_id);
+create index if not exists idx_tasks_user_id on public.tasks(user_id);
+create index if not exists idx_notes_user_id on public.notes(user_id);
+create index if not exists idx_track_phases_user_id on public.track_phases(user_id);
+create index if not exists idx_track_items_user_id on public.track_items(user_id);
+create index if not exists idx_track_items_phase_id on public.track_items(phase_id);
 
 -- ---------------------------------------------------------------------------
 -- Table privileges. RLS decides WHICH rows are visible, but Postgres also

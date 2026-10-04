@@ -2,6 +2,8 @@
  *  CalendarEvent; the month grid and agenda list render from this one shape.
  *  The `source` field is the plug point for a future Google Calendar sync. */
 
+import { dateKey } from "@/lib/dates";
+
 export type CalendarSource = "task" | "job" | "hackathon" | "track";
 
 export type CalendarEvent = {
@@ -136,5 +138,35 @@ export function groupByDate(events: CalendarEvent[]): Map<string, CalendarEvent[
   return map;
 }
 
+export type MonthCell = {
+  key: string;
+  day: number;
+  inMonth: boolean;
+};
+
+/** Six-week (42-cell) month grid starting on Sunday. Shared by the full
+ *  calendar page and the hub's timeline card so the two can never disagree. */
+export function monthCells(year: number, month: number): MonthCell[] {
+  const first = new Date(year, month, 1);
+  const start = new Date(year, month, 1 - first.getDay());
+  return Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    return {
+      key: dateKey(d),
+      day: d.getDate(),
+      inMonth: d.getMonth() === month,
+    };
+  });
+}
+
+/** "March 2026" — month heading used by both calendar surfaces. */
+export function formatMonthLabel(year: number, month: number): string {
+  return new Date(Date.UTC(year, month, 1)).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 /** YYYY-MM-DD in local time (never toISOString — that shifts timezones). */
-export { dateKey } from "@/lib/dates";
+export { dateKey };

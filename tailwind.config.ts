@@ -18,10 +18,17 @@ const config: Config = {
     extend: {
       colors: {
         // ── Monochrome black + white palette (matches login page) ────────────
-        background:   "#000000",   // pure black — same as auth pages
+        background:   "#000000",   // pure black — same as auth pages, app base
         foreground:   "#FFFFFF",   // white text
-        surface:      "#0B0B0B",   // card surface — same as auth card
-        border:       "#1A1A1A",   // ≈ white/10 on black, like auth borders
+        surface:      "#0B0B0B",   // sidebar / section surface
+        border:       "#1A1A1A",   // hairline divider — very low contrast
+        // Tonal elevation ramp: base #000 → surface #0B0B0B → card #111111.
+        // Cards sit ABOVE the sidebar rather than matching it, so panels read
+        // as elevation instead of outlines (see `--color-card` in globals.css).
+        card: {
+          DEFAULT: "#111111",   // card surface — one step up from `surface`
+          hover:   "#141414",   // hover / pressed lift
+        },
         muted: {
           DEFAULT:    "#111111",   // tinted muted surface
           foreground: "#C4C4C4",   // brighter grey secondary text
@@ -68,8 +75,8 @@ const config: Config = {
         },
       },
       borderRadius: {
-        card:  "10px",
-        field: "8px",
+        card:  "16px",   // large panels (reference dashboard)
+        field: "10px",   // inputs, buttons, pills, rows
       },
       boxShadow: {
         lift:   "0 4px 18px rgba(0, 0, 0, 0.50)",
@@ -77,6 +84,10 @@ const config: Config = {
         modal:  "0 16px 48px rgba(0, 0, 0, 0.70)",
         glow:   "0 0 0 3px rgba(255, 255, 255, 0.12)",
         inset:  "inset 0 1px 3px rgba(0, 0, 0, 0.30)",
+        // Elevation is carried by surface tone, not shadow — these are the
+        // only shadows in the system and they stay deliberately faint.
+        panel:  "0 1px 2px rgba(0, 0, 0, 0.40)",
+        "panel-lift": "0 8px 24px -8px rgba(0, 0, 0, 0.60)",
       },
       fontFamily: {
         sans: ["var(--font-raleway)", "system-ui", "sans-serif"],

@@ -7,7 +7,6 @@ import { motion } from "framer-motion";
 import { CalendarDays, Home } from "lucide-react";
 import { haptics } from "@/lib/haptics";
 import { ProfileMenu } from "@/components/shell/profile-menu";
-import { TimerButton } from "@/components/shell/timer-button";
 
 const linkClass =
   "glass-btn-base glass-btn-outline flex h-10 items-center justify-center gap-1.5 rounded-field px-2.5 transition-all md:h-9 md:min-w-9 md:px-3 md:text-sm md:font-medium";
@@ -46,7 +45,6 @@ export function TopBar() {
             <span className="hidden md:inline">Calendar</span>
           </Link>
         </motion.div>
-        <TimerButton />
         <ProfileMenu />
       </nav>
     </div>
