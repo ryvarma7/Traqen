@@ -60,7 +60,7 @@ export type Task = {
   due_date: string | null;
   category: string | null;
   related_type: "job" | "hackathon" | null;
-  related_id: string | null;
+  related_name: string | null;
   created_at: string;
   updated_at: string;
 };

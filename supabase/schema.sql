@@ -198,7 +198,7 @@ create policy "Users manage own hackathons"
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
--- Tasks (optionally linked to a job application or a hackathon)
+-- Tasks (optionally tagged with the job company or hackathon name it belongs to)
 create table if not exists public.tasks (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references auth.users(id) on delete cascade not null,
@@ -210,7 +210,7 @@ create table if not exists public.tasks (
   due_date date,
   category text,
   related_type text check (related_type in ('job','hackathon')),
-  related_id uuid,
+  related_name text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );

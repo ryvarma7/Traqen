@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Check, ExternalLink } from "lucide-react";
 import { ThinkingOrb } from "thinking-orbs";
 import { CountdownPill } from "@/components/shared/countdown-pill";
@@ -46,16 +46,26 @@ export function TrackTaskRow({
         <StatusCheckbox item={item} busy={busy} onToggle={onToggle} />
 
         <div className="min-w-0 flex-1 py-0.5">
-          <p
-            className={cn(
-              "break-words text-[0.9375rem] leading-snug md:text-base",
-              done
-                ? "text-muted-foreground line-through decoration-white/30"
-                : "font-medium text-foreground"
-            )}
-          >
-            {item.title}
-          </p>
+          <span className="relative block">
+            <p
+              className={cn(
+                "break-words text-[0.9375rem] leading-snug md:text-base",
+                done ? "text-muted-foreground" : "font-medium text-foreground"
+              )}
+            >
+              {item.title}
+            </p>
+            {/* The crossing-out line, drawn from the left rather than switched
+                on with a CSS `line-through` — the stroke is the confirmation
+                that the tap registered. */}
+            <motion.span
+              aria-hidden
+              className="pointer-events-none absolute left-0 top-1/2 h-px w-full origin-left bg-foreground/60"
+              initial={false}
+              animate={{ scaleX: done ? 1 : 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            />
+          </span>
           <ClampedDescription text={item.description} />
         </div>
 
@@ -112,24 +122,36 @@ function StatusCheckbox({
       onClick={() => onToggle(item)}
       className={cn(
         TAP,
-        "focus-ring -ml-2 -mt-1 flex shrink-0 items-center justify-center rounded-full disabled:opacity-70"
+        "focus-ring hover:bg-white/[0.06] -ml-2 -mt-1 flex shrink-0 items-center justify-center rounded-full disabled:opacity-70"
       )}
     >
-      <span
+      <motion.span
         aria-hidden
-        className={cn(
-          "flex h-[22px] w-[22px] items-center justify-center rounded-full border transition-colors",
-          done
-            ? "border-white bg-white text-black"
-            : "border-white/35 text-transparent hover:border-white/70"
-        )}
+        className="flex h-[22px] w-[22px] items-center justify-center rounded-full border"
+        animate={{
+          backgroundColor: done ? "rgba(255,255,255,1)" : "rgba(0,0,0,0)",
+          borderColor: done ? "rgba(255,255,255,1)" : "rgba(255,255,255,0.35)",
+          scale: done ? [1, 1.2, 1] : 1,
+        }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
       >
         {busy ? (
           <ThinkingOrb state="solving" size={20} theme="dark" />
-        ) : done ? (
-          <Check className="h-3.5 w-3.5" strokeWidth={3} />
-        ) : null}
-      </span>
+        ) : (
+          <AnimatePresence>
+            {done && (
+              <motion.span
+                initial={{ opacity: 0, scale: 0.4 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.4 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+              >
+                <Check className="h-3.5 w-3.5 text-black" strokeWidth={3} />
+              </motion.span>
+            )}
+          </AnimatePresence>
+        )}
+      </motion.span>
     </motion.button>
   );
 }

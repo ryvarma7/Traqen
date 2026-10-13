@@ -112,17 +112,19 @@ function DayTimeline({
 
   return (
     <div className="no-scrollbar overflow-x-auto pb-1">
-      <div className="min-w-[520px]">
+      {/* The hour gutter is 2rem on phones and 3.5rem from md — a 14-unit
+          gutter is most of a 375px viewport spent on empty margin. */}
+      <div className="min-w-[380px] md:min-w-[520px]">
         {!isToday && (
           <p className="mb-2 text-2xs text-muted-foreground/70">{heading}</p>
         )}
-        <div className="relative ml-14 border-l border-white/10">
+        <div className="relative ml-9 border-l border-white/10 md:ml-14">
           {hours.map((hour) => (
             <div
               key={hour}
               className="relative h-11 border-b border-white/[0.06] last:border-b-0"
             >
-              <span className="absolute -left-14 top-1.5 w-11 text-right font-mono text-2xs tabular-nums text-muted-foreground/60">
+              <span className="absolute -left-9 top-1.5 w-7 text-right font-mono text-2xs tabular-nums text-muted-foreground/60 md:-left-14 md:w-11">
                 {hour > 12 ? `${hour - 12}pm` : `${hour}am`}
               </span>
             </div>
@@ -182,7 +184,7 @@ function WeekStrip({
 
   return (
     <div className="no-scrollbar -mx-1 overflow-x-auto px-1">
-      <div className="grid min-w-[540px] grid-cols-7 gap-1.5">
+      <div className="grid min-w-[440px] grid-cols-7 gap-1 md:min-w-[540px] md:gap-1.5">
         {days.map(({ key, day, weekday }) => {
           const events = eventsByDate[key] ?? [];
           return (

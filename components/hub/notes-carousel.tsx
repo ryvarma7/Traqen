@@ -3,10 +3,13 @@
 import * as React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ChevronRight, StickyNote } from "lucide-react";
+import { ChevronRight, Eye, EyeOff, StickyNote } from "lucide-react";
+import { toast } from "sonner";
 import { ColorDot } from "@/components/notes/color-dot";
 import { SegmentedTabs } from "@/components/hub/segmented-tabs";
+import { setNotePrivacy } from "@/lib/actions/notes";
 import { relativeTime } from "@/lib/dates";
+import { haptics } from "@/lib/haptics";
 
 export type NotePreview = {
   id: string;
@@ -14,8 +17,13 @@ export type NotePreview = {
   content: string | null;
   color: string;
   pinned: boolean;
+  private: boolean;
   updated_at: string;
 };
+
+/** Body text → up to three bullet lines. The cards are deliberately short, so
+ *  three lines is what fits before the fade mask. */
+const PREVIEW_LINES = 3;
 
 /**
  * Horizontally scrolling row of note previews, deliberately running past the
@@ -27,6 +35,23 @@ export type NotePreview = {
  */
 export function NotesCarousel({ notes }: { notes: NotePreview[] }) {
   const [tab, setTab] = React.useState<"recent" | "pinned">("recent");
+  /** Optimistic overrides, mirroring the notes page: the card flips instantly
+   *  and rolls back if the write fails. */
+  const [privacy, setPrivacy] = React.useState<Record<string, boolean>>({});
+
+  const isHidden = (note: NotePreview) => privacy[note.id] ?? note.private;
+
+  const togglePrivacy = async (note: NotePreview) => {
+    const next = !isHidden(note);
+    haptics.toggle(next);
+    setPrivacy((prev) => ({ ...prev, [note.id]: next }));
+    const result = await setNotePrivacy(note.id, next);
+    if (result.error) {
+      setPrivacy((prev) => ({ ...prev, [note.id]: !next }));
+      haptics.error();
+      toast.error(result.error);
+    }
+  };
 
   const visible = React.useMemo(() => {
     const sorted = [...notes].sort(
@@ -79,7 +104,7 @@ export function NotesCarousel({ notes }: { notes: NotePreview[] }) {
             >
               <Link
                 href="/notes"
-                className="block h-56 rounded-card border border-white/10 bg-card-hover p-3.5 transition-colors hover:border-white/20"
+                className="block h-44 rounded-card border border-white/10 bg-card-hover p-3.5 transition-colors hover:border-white/20"
               >
                 <div className="mb-2.5 flex items-center justify-between gap-2">
                   <span className="flex items-center gap-1.5 text-2xs font-medium text-muted-foreground">
@@ -87,8 +112,35 @@ export function NotesCarousel({ notes }: { notes: NotePreview[] }) {
                     Note
                     <ColorDot color={note.color} />
                   </span>
-                  <span className="shrink-0 text-2xs text-muted-foreground/60">
-                    {relativeTime(note.updated_at)}
+                  <span className="flex shrink-0 items-center gap-1">
+                    <span className="text-2xs text-muted-foreground/60">
+                      {relativeTime(note.updated_at)}
+                    </span>
+                    {note.content && (
+                      <button
+                        type="button"
+                        /* The card is a Link; without this the toggle would
+                           also navigate to /notes. */
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          togglePrivacy(note);
+                        }}
+                        aria-label={
+                          isHidden(note)
+                            ? "Show preview on overview"
+                            : "Hide preview on overview"
+                        }
+                        title={isHidden(note) ? "Show preview" : "Hide preview"}
+                        className="relative z-10 -mr-1 rounded-field p-1 text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                      >
+                        {isHidden(note) ? (
+                          <EyeOff className="h-3.5 w-3.5" />
+                        ) : (
+                          <Eye className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    )}
                   </span>
                 </div>
 
@@ -98,19 +150,25 @@ export function NotesCarousel({ notes }: { notes: NotePreview[] }) {
 
                 {/* Bulleted preview, masked at the bottom so the text fades
                     instead of being cut on a hard edge. */}
-                <div className="fade-bottom mt-2 max-h-32 overflow-hidden">
-                  <ul className="space-y-1">
-                    {previewLines(note.content).map((line, idx) => (
-                      <li
-                        key={idx}
-                        className="flex gap-1.5 text-2xs leading-relaxed text-muted-foreground"
-                      >
-                        <span aria-hidden className="mt-1.5 h-0.5 w-0.5 shrink-0 rounded-full bg-muted-foreground/60" />
-                        <span className="line-clamp-1">{line}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                {isHidden(note) ? (
+                  <p className="mt-2 text-2xs italic text-muted-foreground/70">
+                    Content hidden
+                  </p>
+                ) : (
+                  <div className="fade-bottom mt-2 max-h-14 overflow-hidden">
+                    <ul className="space-y-1">
+                      {previewLines(note.content).map((line, idx) => (
+                        <li
+                          key={idx}
+                          className="flex gap-1.5 text-2xs leading-relaxed text-muted-foreground"
+                        >
+                          <span aria-hidden className="mt-1.5 h-0.5 w-0.5 shrink-0 rounded-full bg-muted-foreground/60" />
+                          <span className="line-clamp-1">{line}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </Link>
             </motion.div>
           ))}
@@ -120,12 +178,12 @@ export function NotesCarousel({ notes }: { notes: NotePreview[] }) {
   );
 }
 
-/** Body text → up to five bullet lines, so a note's structure previews. */
+/** Body text → a few bullet lines, so a note's structure previews. */
 function previewLines(content: string | null): string[] {
   if (!content) return [];
   return content
     .split(/\r?\n+/)
     .map((l) => l.replace(/^[-*•]\s*/, "").trim())
     .filter(Boolean)
-    .slice(0, 5);
+    .slice(0, PREVIEW_LINES);
 }

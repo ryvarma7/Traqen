@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/tracks/confirm-dialog";
+import { beginNav } from "@/components/shell/nav-loader";
 import { PhaseAccordion, PhaseRail, PhaseTasks } from "@/components/tracks/phase-list";
 import { RescheduleSheet } from "@/components/tracks/reschedule-sheet";
 import { TrackMenu } from "@/components/tracks/track-menu";
@@ -23,10 +24,18 @@ import { buildPhaseProgress, nextDueItem, paceOf, upNextItem } from "@/lib/track
 import type { LearningTrack, TrackItem, TrackPhase } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+/** How long the "Step completed / Undo" toast stays up. Long enough to notice
+ *  a mis-tap on a one-button action, short enough not to linger over the next
+ *  step. */
+const STEP_UNDO_MS = 6000;
+
+/** Per-step toast id, so undoing dismisses its own confirmation rather than
+ *  every toast on screen. */
+const trackToastId = (itemId: string) => `track-step-done-${itemId}`;
+
 /** Scopes the reduced-motion opt-out to this page: framer drops transform and
  *  opacity animations for anyone who has `prefers-reduced-motion` set, without
- *  changing behaviour for the rest of the app. */
-export function TrackDetailView(
+ *  changing behaviour for the rest of the app. */export function TrackDetailView(
   props: {
     track: LearningTrack;
     phases: TrackPhase[];
@@ -104,7 +113,12 @@ function TrackDetail({
     setOpenPhaseId(id);
   };
 
-  /** Optimistic done / not-done toggle with a rollback if the write fails. */
+  /** Optimistic done / not-done toggle with a rollback if the write fails.
+   *
+   *  Marking a step done is one tap and instantly rewrites the "Up next" card
+   *  to a different task, so the row the user hit is gone from view before
+   *  they've registered the tap. The undo toast is the way back for a
+   *  mis-tap; the phase list below still shows the step struck through. */
   const toggleItem = async (item: TrackItem) => {
     if (busyIds.has(item.id)) return;
     const nextStatus: TrackItem["status"] = item.status === "Done" ? "To do" : "Done";
@@ -129,8 +143,20 @@ function TrackDetail({
       return;
     }
 
-    if (nextStatus === "Done") haptics.success();
-    else haptics.tapLight();
+    if (nextStatus === "Done") {
+      haptics.success();
+      toast("Step completed", {
+        id: trackToastId(item.id),
+        description: item.title,
+        action: {
+          label: "Undo",
+          onClick: () => void toggleItem({ ...item, status: "Done" }),
+        },
+        duration: STEP_UNDO_MS,
+      });
+    } else {
+      haptics.tapLight();
+    }
 
     // Mirror the server's rule in both directions so the header stays honest:
     // all done -> Completed, anything else -> In progress. The server's update
@@ -183,6 +209,7 @@ function TrackDetail({
     haptics.delete();
     setConfirmDelete(false);
     toast.success("Track deleted");
+    beginNav();
     router.push("/tracks");
   };
 

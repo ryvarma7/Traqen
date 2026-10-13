@@ -247,11 +247,15 @@ export function NotesView({ notes }: { notes: Note[] }) {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Note title"
-              className="mr-2 h-9 border-transparent bg-transparent px-0 text-base font-semibold focus:border-transparent focus:ring-0"
+              /* px-0 put the title text hard against the modal edge, 12px left
+                 of the body below it (px-5 container + px-3 field). pl-3 lands
+                 it on the same left edge as the content, matching the h2 in
+                 view mode so toggling edit doesn't shift the title. */
+              className="mr-2 h-9 border-transparent bg-transparent pl-3 pr-0 text-base font-semibold focus:border-transparent focus:ring-0"
               autoFocus
             />
           ) : (
-            <h2 className="flex min-w-0 items-center gap-2 text-base font-semibold tracking-tight text-foreground">
+            <h2 className="flex min-w-0 items-center gap-2 pl-3 text-base font-semibold tracking-tight text-foreground">
               {viewing && viewing.color !== "gray" && (
                 <ColorDot color={viewing.color} />
               )}

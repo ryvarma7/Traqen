@@ -16,7 +16,7 @@ import { FormSheet } from "@/components/shared/form-sheet";
 import { FabPlus } from "@/components/shared/fab-plus";
 import { CountdownPill } from "@/components/shared/countdown-pill";
 import { PriorityPill } from "@/components/shared/priority-pill";
-import { TaskForm, type LinkableItem } from "@/components/tasks/task-form";
+import { TaskForm } from "@/components/tasks/task-form";
 import { setTaskStatus } from "@/lib/actions/tasks";
 import { useCreateShortcut, usePendingCreate } from "@/lib/create-bus";
 import { daysUntil } from "@/lib/dates";
@@ -49,10 +49,8 @@ const itemVariants: Variants = {
 
 export function TasksView({
   tasks,
-  linkables,
 }: {
   tasks: Task[];
-  linkables: LinkableItem[];
 }) {
   const [sheet, setSheet] = React.useState<{ open: boolean; editing: string | null; preset: string }>({
     open: false,
@@ -96,11 +94,7 @@ export function TasksView({
     }
   };
 
-  const linkLabel = React.useMemo(() => {
-    const map = new Map(linkables.map((l) => [l.id, l.label]));
-    return (task: Task) =>
-      task.related_id ? map.get(task.related_id) ?? null : null;
-  }, [linkables]);
+  const linkLabel = (task: Task) => task.related_name ?? null;
 
   const editing = tasks.find((t) => t.id === sheet.editing) ?? null;
 
@@ -327,7 +321,6 @@ export function TasksView({
       >
         <TaskForm
           item={editing ?? (sheet.open ? ({ status: sheet.preset } as Task) : null)}
-          linkables={linkables}
           onClose={closeSheet}
         />
       </FormSheet>

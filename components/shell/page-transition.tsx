@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { AppSidebar } from "@/components/shell/app-sidebar";
 import { MobileTabBar } from "@/components/shell/mobile-tab-bar";
 import { MobileTopBar } from "@/components/shell/mobile-top-bar";
+import { NavLoader } from "@/components/shell/nav-loader";
 
 /**
  * App shell + shared page entrance.
@@ -14,6 +15,9 @@ import { MobileTopBar } from "@/components/shell/mobile-top-bar";
  * The blur-in entrance — opacity 0→1, blur 8px→0, scale 0.98→1, ~250ms —
  * stays on the <main> only, so the sidebar and tab bar are stable while the
  * page content swaps.
+ *
+ * <main> is the positioning context for NavLoader, which blurs this column in
+ * place while a navigation resolves rather than replacing it.
  */
 export function PageTransition({ children }: { children: React.ReactNode }) {
   return (
@@ -26,10 +30,11 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
         exit={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
         transition={{ duration: 0.25, ease: "easeOut" }}
         style={{ transformOrigin: "top center" }}
-        className="min-w-0 flex-1 px-4 pb-tabbar pt-5 md:px-8 md:pb-16 md:pt-8"
+        className="relative min-w-0 flex-1 px-4 pb-tabbar pt-5 md:px-8 md:pb-16 md:pt-8"
       >
         <MobileTopBar />
         {children}
+        <NavLoader />
       </motion.main>
 
       <MobileTabBar />

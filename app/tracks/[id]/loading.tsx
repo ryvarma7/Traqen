@@ -1,8 +1,13 @@
+import { PageTransition } from "@/components/shell/page-transition";
+
 /** Skeleton shown while the track, its phases and its steps are fetched. The
- *  shapes mirror TrackDetailView so nothing jumps when the real page lands. */
+ *  shapes mirror TrackDetailView so nothing jumps when the real page lands.
+ *  Wrapped in the shell so the sidebar and tab bar stay put — a bare fallback
+ *  here would replace the whole tree, shell included. */
 export default function TrackDetailLoading() {
   return (
-    <div className="space-y-5" aria-busy="true" aria-label="Loading track">
+    <PageTransition>
+      <div className="space-y-5" aria-busy="true" aria-label="Loading track">
       {/* Header */}
       <div className="rounded-card glass-section p-4 md:p-6">
         <div className="skeleton h-4 w-24" />
@@ -51,7 +56,8 @@ export default function TrackDetailLoading() {
             ))}
           </div>
         </div>
+        </div>
       </div>
-    </div>
+    </PageTransition>
   );
 }

@@ -25,24 +25,16 @@ const schema = z.object({
   due_date: z.string().optional(),
   category: z.string().optional(),
   related_type: z.string().optional(),
-  related_id: z.string().optional(),
+  related_name: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
 
-export type LinkableItem = {
-  id: string;
-  label: string;
-  type: "job" | "hackathon";
-};
-
 export function TaskForm({
   item,
-  linkables,
   onClose,
 }: {
   item: Task | null;
-  linkables: LinkableItem[];
   onClose: () => void;
 }) {
   const [error, setError] = React.useState<string | null>(null);
@@ -63,7 +55,7 @@ export function TaskForm({
       due_date: item?.due_date ?? "",
       category: item?.category ?? "",
       related_type: item?.related_type ?? "",
-      related_id: item?.related_id ?? "",
+      related_name: item?.related_name ?? "",
     },
   });
 
@@ -161,7 +153,7 @@ export function TaskForm({
           value={relatedType ?? ""}
           onChange={(e) => {
             setValue("related_type", e.target.value);
-            setValue("related_id", "");
+            setValue("related_name", "");
           }}
         >
           <option value="">Not linked</option>
@@ -172,17 +164,19 @@ export function TaskForm({
 
       {relatedType && (
         <div className="space-y-1.5">
-          <Label htmlFor="related_id">Which one?</Label>
-          <Select id="related_id" {...register("related_id")}>
-            <option value="">Select…</option>
-            {linkables
-              .filter((l) => l.type === relatedType)
-              .map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.label}
-                </option>
-              ))}
-          </Select>
+          <Label htmlFor="related_name">
+            {relatedType === "job" ? "Company" : "Hackathon name"}
+          </Label>
+          <Input
+            id="related_name"
+            autoComplete="off"
+            placeholder={
+              relatedType === "job"
+                ? "e.g. Acme Corp"
+                : "e.g. Climate Code Sprint"
+            }
+            {...register("related_name")}
+          />
         </div>
       )}
 

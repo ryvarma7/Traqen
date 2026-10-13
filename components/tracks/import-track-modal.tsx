@@ -15,6 +15,7 @@ import { ThinkingOrb } from "thinking-orbs";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { FormSheet } from "@/components/shared/form-sheet";
+import { beginNav } from "@/components/shell/nav-loader";
 import { importTrack } from "@/lib/actions/tracks";
 import { buildPrompt, parseTrackInput, type ParsedTrack } from "@/lib/tracks/contract";
 import { haptics } from "@/lib/haptics";
@@ -127,6 +128,7 @@ export function ImportTrackModal({
     haptics.success();
     toast.success("Track imported");
     close();
+    beginNav();
     router.push(`/tracks/${result.trackId}`);
   };
 

@@ -38,10 +38,19 @@ function accentFor(date: string) {
   return "rgba(255, 255, 255, 0.28)"; // 7d+ — present but not urgent
 }
 
-export function AttentionStrip({ items }: { items: AttentionItem[] }) {
+export function AttentionStrip({
+  items,
+  total,
+}: {
+  items: AttentionItem[];
+  /** How many items matched before the display cap, so a truncated strip can
+   *  say so instead of implying the list is complete. */
+  total?: number;
+}) {
   if (items.length === 0) return null;
 
   const urgent = items.filter((i) => daysUntil(i.earliest) <= 0).length;
+  const hidden = (total ?? items.length) - items.length;
 
   return (
     <section aria-label="Needs attention" className="panel mb-4 px-4 py-3.5 md:px-5">
@@ -59,6 +68,7 @@ export function AttentionStrip({ items }: { items: AttentionItem[] }) {
             <span className="text-danger">{urgent} due now · </span>
           )}
           {items.length} {items.length === 1 ? "item" : "items"}
+          {hidden > 0 && ` · ${hidden} later`}
         </span>
       </header>
 

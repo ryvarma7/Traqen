@@ -74,8 +74,10 @@ export function ApplicationsPanel({
                 >
                   {row.title}
                 </Link>
-                <StatusPill status={row.status} />
-                {row.date && <CountdownPill date={row.date} />}
+                {/* Pills hold their width on a phone — the title truncates
+                    first, so a long company name never clips "Interview". */}
+                <StatusPill status={row.status} className="shrink-0" />
+                {row.date && <CountdownPill date={row.date} className="shrink-0" />}
               </li>
             );
           })}

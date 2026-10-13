@@ -93,7 +93,7 @@ export default async function HubPage({
     supabase.from("tasks").select("id, title, status, due_date"),
     supabase
       .from("notes")
-      .select("id, title, content, color, pinned, updated_at")
+      .select("id, title, content, color, pinned, private, updated_at")
       .order("updated_at", { ascending: false })
       .limit(24),
     supabase.from("learning_tracks").select("id, title, status"),
@@ -123,12 +123,24 @@ export default async function HubPage({
   const trackTitles = new Map(tracks.map((t) => [t.id, t.title]));
 
   // ── Needs attention ──────────────────────────────────────────────────────
+  // A last-minute reminder, not a forecast. Two rules keep it honest: only
+  // outcomes you can still act on (a won hackathon is a result, not a to-do),
+  // and only the next step of a learning track — the full imported plan would
+  // otherwise fill every slot with future coursework and bury a real deadline.
   // One entry per entity, not per date: a company carrying both a deadline and
   // a follow-up is a single card with two chips. Only dates that still matter
   // for the row's current status are kept — a deadline is history once you've
-  // applied, and a rejected or withdrawn row is dropped entirely — so the
-  // strip is a triage list instead of a mirror of every date column.
-  const HORIZON_DAYS = 14;
+  // applied.
+  const HORIZON_DAYS = 7;
+  /** Past this, an overdue row is stale history rather than a live reminder. */
+  const STALE_OVERDUE_DAYS = -14;
+  const ATTENTION_HACKATHON_STATUSES = new Set([
+    "Saved",
+    "Applied",
+    "Shortlisted",
+    "In progress",
+  ]);
+
   const candidates: AttentionItem[] = [];
 
   const add = (
@@ -141,7 +153,10 @@ export default async function HubPage({
     dates: Omit<AttentionDate, "label">[]
   ) => {
     const within = dates.filter(
-      (d) => d.date !== null && daysUntil(d.date) <= HORIZON_DAYS
+      (d) =>
+        d.date !== null &&
+        daysUntil(d.date) <= HORIZON_DAYS &&
+        daysUntil(d.date) >= STALE_OVERDUE_DAYS
     );
     if (within.length === 0) return;
     const labelled: AttentionDate[] = within.map((d) => ({
@@ -164,7 +179,7 @@ export default async function HubPage({
   }
 
   for (const h of hackathons) {
-    if (!ACTIVE_HACKATHON_STATUSES.has(h.status)) continue;
+    if (!ATTENTION_HACKATHON_STATUSES.has(h.status)) continue;
     const dates =
       h.status === "Saved"
         ? [{ date: h.deadline, role: "deadline" as const }]
@@ -188,22 +203,42 @@ export default async function HubPage({
     }
   }
 
+  // Only the soonest unfinished step per track. An imported plan is a long
+  // ordered list of dated steps; surfacing all of them turns the strip into a
+  // syllabus and buries anything with a real deadline behind it.
+  const nextStepByTrack = new Map<string, (typeof trackItems)[number]>();
   for (const item of trackItems) {
-    if (item.status !== "Done") {
-      add(
-        item.id,
-        `/tracks/${item.track_id}`,
-        `${trackTitles.get(item.track_id) ?? "Track"} · ${item.title}`,
-        null,
-        "Course step",
-        item.status,
-        [{ date: item.target_date, role: "due" }]
-      );
+    if (item.status === "Done") continue;
+    const seen = nextStepByTrack.get(item.track_id);
+    if (!seen || (item.target_date ?? "9999-12-31") < (seen.target_date ?? "9999-12-31")) {
+      nextStepByTrack.set(item.track_id, item);
     }
   }
+  for (const item of nextStepByTrack.values()) {
+    add(
+      item.id,
+      `/tracks/${item.track_id}`,
+      `${trackTitles.get(item.track_id) ?? "Track"} · ${item.title}`,
+      null,
+      "Course step",
+      item.status,
+      [{ date: item.target_date, role: "due" }]
+    );
+  }
 
-  candidates.sort((a, b) => (a.earliest < b.earliest ? -1 : 1));
-  const attention = candidates.slice(0, 6);
+  // Soonest first, but bucketed by urgency so something due today outranks
+  // something due in five days — a stale overdue entry would otherwise win on
+  // raw date. Undated-but-active rows are already gone: `add` drops them.
+  const urgency = (iso: string) => {
+    const d = daysUntil(iso);
+    if (d <= 0) return 0;
+    if (d <= 3) return 1;
+    return 2;
+  };
+  candidates.sort(
+    (a, b) => urgency(a.earliest) - urgency(b.earliest) || (a.earliest < b.earliest ? -1 : 1)
+  );
+  const attention = candidates.slice(0, 5);
 
   // ── Calendar timeline ────────────────────────────────────────────────────
   const events = buildCalendarEvents({
@@ -261,20 +296,24 @@ export default async function HubPage({
 
         <HubHeader greeting={greeting} name={hasEnteredName ? username : undefined} />
 
-        <AttentionStrip items={attention} />
-
-        <NotesCarousel notes={notes} />
-
-        <CalendarTimeline eventsByDate={Object.fromEntries(groupByDate(events))} />
+        <AttentionStrip items={attention} total={candidates.length} />
 
         {/* `minmax(0,1fr)` is load-bearing: the default implicit `auto` column
             is floored at its items' min-content, and a `truncate` span is
             `white-space: nowrap`, so its min-content is the full unwrapped
-            text. That floor pushed the column wider than the phone viewport. */}
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2 md:items-start">
+            text. That floor pushed the column wider than the phone viewport.
+
+            Stacked, the panels are already separated by their own `mb-4`, so the
+            row gap only applies to the two-column desktop layout — otherwise a
+            phone would see 32px between two panels that read as one column. */}
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-x-4 gap-y-0 md:grid-cols-2 md:items-start">
           <TasksPanel tasks={openTasks} />
           <ApplicationsPanel jobs={hubJobs} hackathons={hubHackathons} />
         </div>
+
+        <CalendarTimeline eventsByDate={Object.fromEntries(groupByDate(events))} />
+
+        <NotesCarousel notes={notes} />
       </PageTransition>
     </>
   );

@@ -15,7 +15,7 @@ const taskSchema = z.object({
   due_date: z.preprocess((value) => value === "" ? undefined : value, z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()),
   category: z.preprocess((value) => value === "" ? undefined : value, z.string().max(200).optional()),
   related_type: z.preprocess((value) => value === "" ? undefined : value, z.enum(["job", "hackathon"]).optional()),
-  related_id: z.preprocess((value) => value === "" ? undefined : value, z.string().uuid().optional()),
+  related_name: z.preprocess((value) => value === "" ? undefined : value, z.string().trim().max(200).optional()),
 });
 
 export async function saveTask(
@@ -31,21 +31,11 @@ export async function saveTask(
   const parsed = taskSchema.safeParse(values);
   if (!parsed.success) return { error: "Please check the task fields." };
 
-  if (parsed.data.related_type !== undefined && parsed.data.related_id === undefined) {
-    return { error: "Select an application to link." };
+  if (parsed.data.related_type !== undefined && parsed.data.related_name === undefined) {
+    return { error: "Name the job or hackathon you're linking." };
   }
-  if (parsed.data.related_id !== undefined && parsed.data.related_type === undefined) {
+  if (parsed.data.related_name !== undefined && parsed.data.related_type === undefined) {
     return { error: "Select a link type." };
-  }
-  if (parsed.data.related_id && parsed.data.related_type) {
-    const table = parsed.data.related_type === "job" ? "job_applications" : "hackathons";
-    const { data: linkedItem, error: linkError } = await supabase
-      .from(table)
-      .select("id")
-      .eq("id", parsed.data.related_id)
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (linkError || !linkedItem) return { error: "That application could not be found." };
   }
 
   const payload: Record<string, unknown> = {
@@ -57,7 +47,7 @@ export async function saveTask(
     due_date: parsed.data.due_date || null,
     category: parsed.data.category || null,
     related_type: parsed.data.related_type || null,
-    related_id: parsed.data.related_id || null,
+    related_name: parsed.data.related_name || null,
     updated_at: new Date().toISOString(),
   };
 
