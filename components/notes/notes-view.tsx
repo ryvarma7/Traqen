@@ -2,20 +2,21 @@
 
 import * as React from "react";
 import { motion, type Variants } from "framer-motion";
-import { Eye, EyeOff, Pencil, Pin, Plus, Trash2, X } from "lucide-react";
+import { Eye, EyeOff, LoaderCircle, Pencil, Pin, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { ColorDot, NOTE_COLORS } from "@/components/notes/color-dot";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { deleteNote, saveNote, setNotePrivacy } from "@/lib/actions/notes";
+import { deleteNote, saveNote } from "@/lib/actions/notes";
 import { useCreateShortcut, usePendingCreate } from "@/lib/create-bus";
 import { relativeTime } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
 import { useIsMobile } from "@/lib/hooks";
+import { updateNotePrivacy } from "@/lib/notes-privacy";
 import { FabPlus } from "@/components/shared/fab-plus";
-import type { Note } from "@/lib/types";
+import type { NoteListItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ModalShell } from "@/components/shared/modal-shell";
 
@@ -33,7 +34,7 @@ const tileVariants: Variants = {
   },
 };
 
-export function NotesView({ notes }: { notes: Note[] }) {
+export function NotesView({ notes }: { notes: NoteListItem[] }) {
   const [viewingId, setViewingId] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
@@ -44,8 +45,11 @@ export function NotesView({ notes }: { notes: Note[] }) {
   const [color, setColor] = React.useState("gray");
   const [pinned, setPinned] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
-  // Optimistic privacy overrides keyed by note id until revalidation lands.
+  // Optimistic privacy overrides keyed by note id. Privacy mutations do not
+  // revalidate the route, so the local value remains responsive while the
+  // database write completes.
   const [privacy, setPrivacy] = React.useState<Record<string, boolean>>({});
+  const [privacyPending, setPrivacyPending] = React.useState<Record<string, boolean>>({});
 
   const isMobile = useIsMobile();
   const viewing = notes.find((n) => n.id === viewingId) ?? null;
@@ -73,7 +77,7 @@ export function NotesView({ notes }: { notes: Note[] }) {
   useCreateShortcut(openNew);
   usePendingCreate(openNew);
 
-  const openNote = (note: Note) => {
+  const openNote = (note: NoteListItem) => {
     setTitle(note.title);
     setContent(note.content ?? "");
     setColor(note.color);
@@ -126,17 +130,34 @@ export function NotesView({ notes }: { notes: Note[] }) {
     close();
   };
 
-  const isHidden = (note: Note) => privacy[note.id] ?? note.private;
+  const isHidden = (note: NoteListItem) => privacy[note.id] ?? note.private;
 
-  const togglePrivacy = async (note: Note) => {
+  const togglePrivacy = async (note: NoteListItem) => {
+    if (privacyPending[note.id]) return;
+
     const next = !isHidden(note);
     haptics.toggle(next);
     setPrivacy((prev) => ({ ...prev, [note.id]: next }));
-    const result = await setNotePrivacy(note.id, next);
-    if (result.error) {
+    setPrivacyPending((prev) => ({ ...prev, [note.id]: true }));
+
+    let error: string | undefined;
+    try {
+      const result = await updateNotePrivacy(note.id, next);
+      error = result.error;
+    } catch {
+      error = "Unable to update note visibility.";
+    } finally {
+      setPrivacyPending((prev) => {
+        const nextPending = { ...prev };
+        delete nextPending[note.id];
+        return nextPending;
+      });
+    }
+
+    if (error) {
       setPrivacy((prev) => ({ ...prev, [note.id]: !next }));
       haptics.error();
-      toast.error(result.error);
+      toast.error(error);
     }
   };
 
@@ -200,18 +221,24 @@ export function NotesView({ notes }: { notes: Note[] }) {
                   <button
                     type="button"
                     aria-label={
-                      isHidden(note)
-                        ? "Show preview on notes page"
-                        : "Hide preview on notes page"
+                      privacyPending[note.id]
+                        ? "Updating note visibility"
+                        : isHidden(note)
+                          ? "Show preview on notes page"
+                          : "Hide preview on notes page"
                     }
                     title={isHidden(note) ? "Show preview" : "Hide preview"}
+                    aria-busy={privacyPending[note.id]}
+                    disabled={privacyPending[note.id]}
                     onClick={(e) => {
                       e.stopPropagation();
                       togglePrivacy(note);
                     }}
-                    className="shrink-0 rounded-field p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    className="shrink-0 rounded-field p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-70"
                   >
-                    {isHidden(note) ? (
+                    {privacyPending[note.id] ? (
+                      <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                    ) : isHidden(note) ? (
                       <EyeOff className="h-3.5 w-3.5" />
                     ) : (
                       <Eye className="h-3.5 w-3.5" />
@@ -351,15 +378,21 @@ export function NotesView({ notes }: { notes: Note[] }) {
                 <Button
                   size="lg"
                   variant="ghost"
+                  disabled={privacyPending[viewing.id]}
+                  aria-busy={privacyPending[viewing.id]}
                   aria-label={
-                    isHidden(viewing)
-                      ? "Show preview on notes page"
-                      : "Hide preview on notes page"
+                    privacyPending[viewing.id]
+                      ? "Updating note visibility"
+                      : isHidden(viewing)
+                        ? "Show preview on notes page"
+                        : "Hide preview on notes page"
                   }
                   title={isHidden(viewing) ? "Show preview" : "Hide preview"}
                   onClick={() => togglePrivacy(viewing)}
                 >
-                  {isHidden(viewing) ? (
+                  {privacyPending[viewing.id] ? (
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                  ) : isHidden(viewing) ? (
                     <EyeOff className="h-4 w-4" />
                   ) : (
                     <Eye className="h-4 w-4" />

@@ -14,6 +14,7 @@ const DATE_FIELDS = [
   "applied_date",
   "follow_up_date",
 ] as const;
+const idSchema = z.string().uuid();
 
 const optionalText = () =>
   z.preprocess(
@@ -85,6 +86,9 @@ export async function saveJobApplication(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
+  if (id !== undefined && !idSchema.safeParse(id).success) {
+    return { error: "Unable to save this application." };
+  }
 
   const parsed = jobSchema.safeParse(values);
   if (!parsed.success) return { error: "Please check the application fields." };
@@ -92,7 +96,7 @@ export async function saveJobApplication(
   const payload = { ...normalize(parsed.data), updated_at: new Date().toISOString() };
 
   const { error } = id
-    ? await supabase.from("job_applications").update(payload).eq("id", id)
+    ? await supabase.from("job_applications").update(payload).eq("id", id).eq("user_id", user.id)
     : await supabase.from("job_applications").insert({ ...payload, user_id: user.id });
 
   if (error) return { error: error.message };
@@ -103,7 +107,11 @@ export async function saveJobApplication(
 
 export async function deleteJobApplication(id: string): Promise<ActionResult> {
   const supabase = await createClient();
-  const { error } = await supabase.from("job_applications").delete().eq("id", id);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  if (!idSchema.safeParse(id).success) return { error: "Unable to delete this application." };
+  const { error } = await supabase.from("job_applications").delete()
+    .eq("id", id).eq("user_id", user.id);
   if (error) return { error: error.message };
   revalidatePath("/");
   revalidatePath("/applications");
@@ -119,6 +127,9 @@ export async function saveHackathon(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
+  if (id !== undefined && !idSchema.safeParse(id).success) {
+    return { error: "Unable to save this hackathon." };
+  }
 
   const parsed = hackathonSchema.safeParse(values);
   if (!parsed.success) return { error: "Please check the hackathon fields." };
@@ -126,7 +137,7 @@ export async function saveHackathon(
   const payload = { ...normalize(parsed.data), updated_at: new Date().toISOString() };
 
   const { error } = id
-    ? await supabase.from("hackathons").update(payload).eq("id", id)
+    ? await supabase.from("hackathons").update(payload).eq("id", id).eq("user_id", user.id)
     : await supabase.from("hackathons").insert({ ...payload, user_id: user.id });
 
   if (error) return { error: error.message };
@@ -137,7 +148,11 @@ export async function saveHackathon(
 
 export async function deleteHackathon(id: string): Promise<ActionResult> {
   const supabase = await createClient();
-  const { error } = await supabase.from("hackathons").delete().eq("id", id);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  if (!idSchema.safeParse(id).success) return { error: "Unable to delete this hackathon." };
+  const { error } = await supabase.from("hackathons").delete()
+    .eq("id", id).eq("user_id", user.id);
   if (error) return { error: error.message };
   revalidatePath("/");
   revalidatePath("/applications");
@@ -155,6 +170,7 @@ export async function saveJobApplicationNotes(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
+  if (!idSchema.safeParse(id).success) return { error: "Unable to save these notes." };
 
   const parsed = z.string().max(5000).safeParse(notes);
   if (!parsed.success) return { error: "Notes are too long." };
@@ -162,7 +178,7 @@ export async function saveJobApplicationNotes(
   const { error } = await supabase
     .from("job_applications")
     .update({ notes: notes.trim() || null, updated_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id).eq("user_id", user.id);
   if (error) return { error: error.message };
   revalidatePath("/");
   revalidatePath("/applications");
@@ -178,6 +194,7 @@ export async function saveHackathonNotes(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
+  if (!idSchema.safeParse(id).success) return { error: "Unable to save these notes." };
 
   const parsed = z.string().max(5000).safeParse(notes);
   if (!parsed.success) return { error: "Notes are too long." };
@@ -185,7 +202,7 @@ export async function saveHackathonNotes(
   const { error } = await supabase
     .from("hackathons")
     .update({ notes: notes.trim() || null, updated_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id).eq("user_id", user.id);
   if (error) return { error: error.message };
   revalidatePath("/");
   revalidatePath("/applications");
@@ -204,12 +221,14 @@ export async function addDropdownOption(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
 
-  const trimmed = value.trim();
-  if (!trimmed) return { error: "Enter a value." };
+  const parsedValue = z.string().trim().min(1).max(200).safeParse(value);
+  if (!parsedValue.success) return { error: "Enter a value under 200 characters." };
+  const trimmed = parsedValue.data;
 
   const allowedFields = new Set([
     "role_type", "location_mode", "source", "type", "purpose", "theme_track", "mode",
   ]);
+  if (section !== "jobs" && section !== "hackathons") return { error: "Invalid dropdown section." };
   if (!allowedFields.has(fieldName)) return { error: "Invalid dropdown field." };
 
   const { error } = await supabase.from("dropdown_options").insert({

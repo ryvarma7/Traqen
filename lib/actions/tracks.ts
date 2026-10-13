@@ -8,7 +8,8 @@ import { resolveOffset, trackSchema, type ParsedTrack } from "@/lib/tracks/contr
 
 type ActionResult = { error?: string };
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const idSchema = z.string().uuid();
+const statusSchema = z.enum(["To do", "In progress", "Done"]);
 
 /** Normalizes a parsed AI track into learning_tracks / track_phases /
  *  track_items rows. Offsets are resolved against the chosen start date. */
@@ -22,7 +23,7 @@ export async function importTrack(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
 
-  if (!isoDate.safeParse(startDate).success) {
+  if (typeof startDate !== "string" || !isValidDateOnly(startDate)) {
     return { error: "Pick a valid start date." };
   }
 
@@ -105,24 +106,30 @@ export async function setTrackItemStatus(
   status: "To do" | "In progress" | "Done"
 ): Promise<ActionResult> {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  if (!idSchema.safeParse(id).success) return { error: "Unable to update this step." };
+  const parsedStatus = statusSchema.safeParse(status);
+  if (!parsedStatus.success) return { error: "Invalid track step status." };
 
-  const { error } = await supabase
+  const { data: item, error } = await supabase
     .from("track_items")
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq("id", id);
+    .update({ status: parsedStatus.data, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .select("id, track_id")
+    .maybeSingle();
   if (error) return { error: error.message };
+  if (!item) return { error: "That track step doesn't exist." };
 
   // Derive track status from its items.
-  const { data: item } = await supabase
-    .from("track_items")
-    .select("track_id")
-    .eq("id", id)
-    .single();
   if (item) {
-    const { data: siblings } = await supabase
+    const { data: siblings, error: siblingError } = await supabase
       .from("track_items")
       .select("status")
-      .eq("track_id", item.track_id);
+      .eq("track_id", item.track_id)
+      .eq("user_id", user.id);
+    if (siblingError) return { error: siblingError.message };
     const list = siblings ?? [];
     const trackStatus =
       list.length > 0 && list.every((s) => s.status === "Done")
@@ -132,6 +139,7 @@ export async function setTrackItemStatus(
       .from("learning_tracks")
       .update({ status: trackStatus, updated_at: new Date().toISOString() })
       .eq("id", item.track_id)
+      .eq("user_id", user.id)
       .neq("status", "On hold");
 
     revalidatePath("/");
@@ -143,8 +151,12 @@ export async function setTrackItemStatus(
 
 export async function deleteTrack(id: string): Promise<ActionResult> {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  if (!idSchema.safeParse(id).success) return { error: "Unable to delete this track." };
   // Phases and items cascade via on delete cascade.
-  const { error } = await supabase.from("learning_tracks").delete().eq("id", id);
+  const { error } = await supabase.from("learning_tracks").delete()
+    .eq("id", id).eq("user_id", user.id);
   if (error) return { error: error.message };
   revalidatePath("/");
   revalidatePath("/tracks");
@@ -156,10 +168,15 @@ export async function setTrackStatus(
   status: "In progress" | "Completed" | "On hold"
 ): Promise<ActionResult> {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  if (!idSchema.safeParse(id).success) return { error: "Unable to update this track." };
+  const parsedStatus = z.enum(["In progress", "Completed", "On hold"]).safeParse(status);
+  if (!parsedStatus.success) return { error: "Invalid track status." };
   const { error } = await supabase
     .from("learning_tracks")
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq("id", id);
+    .update({ status: parsedStatus.data, updated_at: new Date().toISOString() })
+    .eq("id", id).eq("user_id", user.id);
   if (error) return { error: error.message };
   revalidatePath("/");
   revalidatePath("/tracks");
@@ -184,9 +201,13 @@ export async function rescheduleTrackItems(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
 
+  if (!idSchema.safeParse(trackId).success) {
+    return { error: "That track doesn't exist." };
+  }
+
   // A shape check would still let "2026-02-31" through, and addDaysISO would
   // then roll it into March and write the wrong date.
-  if (!isValidDateOnly(newStartISO)) {
+  if (typeof newStartISO !== "string" || !isValidDateOnly(newStartISO)) {
     return { error: "Pick a valid start date." };
   }
 

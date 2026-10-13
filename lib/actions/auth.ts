@@ -28,9 +28,14 @@ export async function logInWithGoogle(): Promise<AuthResult> {
 
 export async function logOut(): Promise<AuthResult> {
   const supabase = await createClient();
-  const { error } = await supabase.auth.signOut();
+  // Local scope clears this browser's session without waiting for a global
+  // token-revocation request. The cookie is the session boundary for this app.
+  const { error } = await supabase.auth.signOut({ scope: "local" });
   if (error) return { error: error.message };
 
   revalidatePath("/", "layout");
-  redirect("/login");
+  // The caller performs the final navigation after the action response applies
+  // the cleared cookies. Returning normally also lets the menu surface errors
+  // instead of leaving a rejected fire-and-forget action behind.
+  return {};
 }

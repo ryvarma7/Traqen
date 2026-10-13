@@ -23,9 +23,16 @@ export async function GET(request: Request) {
       // the Google account, uniqueness enforced). Returns null when the
       // profile already exists. The real Google email stays inside
       // auth.users and is never surfaced in the UI.
-      // Provisioning is best-effort: a missing/out-of-date migration must not
-      // strand a user after Google has already authenticated them.
-      await supabase.rpc("ensure_profile");
+      const { error: profileError } = await supabase.rpc("ensure_profile");
+      if (profileError) {
+        // Do not leave an authenticated session without its profile row: the
+        // dashboard cannot rename or address that account reliably.
+        console.error("[auth/callback] profile provisioning failed:", profileError.code);
+        await supabase.auth.signOut({ scope: "local" });
+        const failed = new URL("/login", origin);
+        failed.searchParams.set("error", "Your account could not be set up. Please try again.");
+        return NextResponse.redirect(failed);
+      }
       // justSignedIn=1 triggers the post-login loading overlay on the hub.
       const home = new URL("/", origin);
       home.searchParams.set("justSignedIn", "1");

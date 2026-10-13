@@ -121,7 +121,20 @@ export function NavLoader() {
       if (event.defaultPrevented || event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
-      const anchor = (event.target as HTMLElement | null)?.closest?.("a");
+      const target = event.target as Element | null;
+      // Controls can legally appear inside card links in the current UI. The
+      // capture listener runs before the control's own onClick, so waiting for
+      // preventDefault() there is too late: it would show the navigation veil
+      // for an action that never navigates.
+      if (
+        target?.closest(
+          "button, input, textarea, select, option, [role=button], [role=checkbox], [role=switch], [contenteditable=true]"
+        )
+      ) {
+        return;
+      }
+
+      const anchor = target?.closest("a");
       const href = anchor?.getAttribute("href");
       if (!anchor || !href || anchor.target === "_blank") return;
       if (href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) return;

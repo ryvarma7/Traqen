@@ -14,8 +14,10 @@ export function PostLoginLoader({
 
   useEffect(() => {
     if (!active) return;
-    const hold = window.setTimeout(() => setActive(false), 2000);
-    return () => window.clearTimeout(hold);
+    // The callback already waits for the server-rendered home page. Do not add
+    // an artificial two-second delay before the user can interact with it.
+    const release = window.requestAnimationFrame(() => setActive(false));
+    return () => window.cancelAnimationFrame(release);
   }, [active]);
 
   useEffect(() => {

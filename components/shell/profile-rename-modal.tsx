@@ -12,20 +12,9 @@ import { useIsMobile } from "@/lib/hooks";
 import { haptics } from "@/lib/haptics";
 import { useProfile } from "@/lib/profile-store";
 import { cn } from "@/lib/utils";
+import { usernameSchema } from "@/lib/profile-validation";
 
-// Display name, not a handle: spaces and punctuation are allowed so it reads
-// naturally in the greeting. Must match the schema in
-// app/api/profile/username/route.ts.
-const schema = z.object({
-  username: z
-    .string()
-    .trim()
-    .min(2, "At least 2 characters")
-    .max(30, "Max 30 characters")
-    .regex(/^[\p{L}\p{N}][\p{L}\p{N} ._'-]*$/u, "Start with a letter or number"),
-});
-
-type FormData = z.infer<typeof schema>;
+type FormData = z.infer<typeof usernameSchema>;
 
 /** Shared rename modal. Rendered once at the app root; opened either by the
  *  profile menu ("Rename") or the hub's first-login gate. Drives the shared
@@ -40,7 +29,7 @@ export function ProfileRenameModal() {
     reset,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(usernameSchema),
   });
 
   // Prefill the current name each time the modal opens (rename flow); first
@@ -51,26 +40,36 @@ export function ProfileRenameModal() {
 
   const onSubmit = async (data: FormData) => {
     haptics.impact();
-    const res = await fetch("/api/profile/username", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: "Something went wrong" }));
-      toast.error(err.error ?? "Something went wrong");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15_000);
+    try {
+      const res = await fetch("/api/profile/username", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        signal: controller.signal,
+      });
+      const result = await res.json().catch(() => null);
+      if (!res.ok || typeof result?.username !== "string") {
+        toast.error(result?.error ?? "Unable to save your name. Please try again.");
+        haptics.error();
+        return;
+      }
+      rename(result.username);
+      toast.success(renameMode === "rename" ? "Name updated" : `Welcome, ${result.username}`);
+      haptics.success();
+      router.refresh();
+    } catch {
+      toast.error("Unable to save your name. Check your connection and try again.");
       haptics.error();
-      return;
+    } finally {
+      window.clearTimeout(timeout);
     }
-    rename(data.username);
-    toast.success(renameMode === "rename" ? "Name updated" : `Welcome, ${data.username}`);
-    haptics.success();
-    router.refresh();
   };
 
   return (
     <MotionConfig transition={{ duration: 0.25, ease: "easeOut" }}>
-      <ModalShell open={renameOpen} onClose={closeRename} variant={isMobile ? "sheet" : "centered"}>
+      <ModalShell open={renameOpen} onClose={() => { if (!isSubmitting) closeRename(); }} variant={isMobile ? "sheet" : "centered"}>
         <div className="flex flex-col gap-6 p-6">
           <div className="text-center">
             <h2 className="text-lg font-semibold text-white">

@@ -11,7 +11,10 @@ export default async function NotesPage() {
   // Auth check runs in parallel with the read; RLS scopes rows to auth.uid().
   const [userRes, notesRes] = await Promise.all([
     supabase.auth.getUser(),
-    supabase.from("notes").select("*"),
+    supabase
+      .from("notes")
+      .select("id, title, content, color, pinned, private, updated_at")
+      .order("updated_at", { ascending: false }),
   ]);
 
   if (!userRes.data.user) redirect("/login");

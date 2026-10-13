@@ -109,6 +109,47 @@ $$;
 grant execute on function public.ensure_profile() to authenticated;
 revoke all on function public.ensure_profile() from public, anon;
 
+-- Rename the display name and mark onboarding complete in one statement. The
+-- JSON merge is deliberately in Postgres so concurrent preference updates do
+-- not overwrite each other.
+create or replace function public.update_profile_username(p_username text)
+returns text
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_username text;
+begin
+  if auth.uid() is null then
+    return null;
+  end if;
+
+  if p_username is null
+     or char_length(p_username) < 2
+     or char_length(p_username) > 30
+     or btrim(p_username) <> p_username
+     or p_username ~ '[[:cntrl:]]' then
+    raise exception 'Invalid profile username' using errcode = '22023';
+  end if;
+
+  update public.profiles
+     set username = p_username,
+         preferences = jsonb_set(
+           coalesce(preferences, '{}'::jsonb),
+           '{name_set}',
+           'true'::jsonb,
+           true
+         )
+   where id = auth.uid()
+   returning username into v_username;
+
+  return v_username;
+end;
+$$;
+
+grant execute on function public.update_profile_username(text) to authenticated;
+revoke all on function public.update_profile_username(text) from public, anon;
+
 -- Extensible per-user dropdown options ("+ Add new")
 create table if not exists public.dropdown_options (
   id uuid primary key default uuid_generate_v4(),

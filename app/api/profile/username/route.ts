@@ -1,20 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { z } from "zod";
-
-// Usernames are display names, not identifiers — spaces and other punctuation
-// are allowed so "Yeshwanth" reads naturally in the hub greeting. Keep this in
-// sync with the modal's client-side schema.
-const usernameSchema = z.object({
-  username: z
-    .string()
-    .trim()
-    .min(2, "At least 2 characters")
-    .max(30, "Max 30 characters")
-    .regex(/^[\p{L}\p{N}][\p{L}\p{N} ._'-]*$/u, "Start with a letter or number"),
-});
+import { usernameSchema } from "@/lib/profile-validation";
+import { readProfile } from "@/lib/supabase/profile";
 
 export async function PATCH(request: Request) {
+  const origin = request.headers.get("origin");
+  if (origin && origin !== new URL(request.url).origin) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
+
   const supabase = await createClient();
 
   const {
@@ -45,32 +39,42 @@ export async function PATCH(request: Request) {
 
   const { username } = parsed.data;
 
-  // Update the username, then merge name_set into any existing preferences
-  // (merge in JS — a flat overwrite would clobber other prefs).
-  const { data: prefsRes } = await supabase
-    .from("profiles")
-    .select("preferences")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  const mergedPrefs = {
-    ...((prefsRes?.preferences as Record<string, unknown> | null) ?? {}),
-    name_set: true,
-  };
-
-  const { error: updateError } = await supabase
-    .from("profiles")
-    .update({ username, preferences: mergedPrefs })
-    .eq("id", user.id);
-
-  if (updateError) {
-    // Log the real Postgres error. The most common cause by far is a leftover
-    // UNIQUE constraint on profiles.username from the pre-Google schema (see
-    // `drop constraint` in supabase/schema.sql); without this log the route
-    // just reported a generic 500 and the cause was invisible.
-    console.error("[profile/username] update failed:", updateError.code, updateError.message);
-    return NextResponse.json({ error: "Failed to update username" }, { status: 500 });
+  // The SQL function merges name_set atomically, so a concurrent preference
+  // update cannot be lost between a read and a write. The fallback keeps rename
+  // working on projects that have not yet run the incremental SQL migration.
+  const { data: rpcUsername, error: rpcError } = await supabase.rpc(
+    "update_profile_username",
+    { p_username: username }
+  );
+  if (!rpcError && typeof rpcUsername === "string") {
+    return NextResponse.json({ username: rpcUsername }, {
+      headers: { "Cache-Control": "private, no-store" },
+    });
+  }
+  if (rpcError && !["PGRST202", "42883"].includes(rpcError.code)) {
+    console.error("[profile/username] update failed:", rpcError.code);
+    return NextResponse.json({ error: "Failed to update username. Please try again." }, { status: 500 });
   }
 
-  return NextResponse.json({ username });
+  const { data: profile, error: readError } = await readProfile(supabase, user.id);
+  if (readError || !profile) {
+    return NextResponse.json({ error: "Profile is unavailable. Please try again." }, { status: 503 });
+  }
+  const preferences = (profile.preferences as Record<string, unknown> | null) ?? {};
+  const { data: updated, error: updateError } = await supabase
+    .from("profiles")
+    .update({ username, preferences: { ...preferences, name_set: true } })
+    .eq("id", user.id)
+    .select("username")
+    .maybeSingle();
+  if (updateError) {
+    console.error("[profile/username] legacy update failed:", updateError.code);
+    return NextResponse.json({ error: "Failed to update username. Please try again." }, { status: 500 });
+  }
+  if (!updated) {
+    return NextResponse.json({ error: "Profile is unavailable. Please try again." }, { status: 503 });
+  }
+  return NextResponse.json({ username: updated.username }, {
+    headers: { "Cache-Control": "private, no-store" },
+  });
 }

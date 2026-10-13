@@ -9,6 +9,7 @@ import { useIsMobile } from "@/lib/hooks";
 import { useProfile } from "@/lib/profile-store";
 import { ModalShell } from "@/components/shared/modal-shell";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 /** Initials avatar — two-letter monogram from the display name. */
 function avatarLabel(name: string | null) {
@@ -28,7 +29,7 @@ function avatarLabel(name: string | null) {
  *    no room below the bottom edge of the viewport.
  */
 export function ProfileMenu({ variant = "icon" }: { variant?: "icon" | "rail" }) {
-  const { username, email, openRename } = useProfile();
+  const { username, openRename } = useProfile();
   const isMobile = useIsMobile();
   const [open, setOpen] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement>(null);
@@ -115,7 +116,7 @@ export function ProfileMenu({ variant = "icon" }: { variant?: "icon" | "rail" })
                   : "right-0 top-full mt-2 w-72 origin-top-right"
               )}
             >
-              <MenuItems username={username} email={email} onClose={close} onRename={openRename} />
+              <MenuItems username={username} onClose={close} onRename={openRename} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -124,7 +125,7 @@ export function ProfileMenu({ variant = "icon" }: { variant?: "icon" | "rail" })
       {isMobile && (
         <ModalShell open={open} onClose={close} variant="sheet">
           <div className="pb-safe-sm px-2 pt-1">
-            <MenuItems username={username} email={email} onClose={close} onRename={openRename} />
+            <MenuItems username={username} onClose={close} onRename={openRename} />
           </div>
         </ModalShell>
       )}
@@ -134,22 +135,40 @@ export function ProfileMenu({ variant = "icon" }: { variant?: "icon" | "rail" })
 
 function MenuItems({
   username,
-  email,
   onClose,
   onRename,
 }: {
   username: string | null;
-  email: string | null;
   onClose: () => void;
   onRename: () => void;
 }) {
+  const [loggingOut, setLoggingOut] = React.useState(false);
+
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    haptics.warning();
+
+    try {
+      const result = await logOut();
+      if (result?.error) {
+        toast.error(result.error);
+        setLoggingOut(false);
+      } else {
+        window.location.replace("/login");
+      }
+    } catch {
+      toast.error("Unable to log out. Please try again.");
+      setLoggingOut(false);
+    }
+  };
+
   return (
     <div className="flex flex-col p-1.5">
       <div className="mb-1 flex flex-col gap-0.5 border-b border-white/10 px-3 pb-2.5 pt-1.5">
         <span className="text-sm font-semibold text-foreground">
           {username ?? "Loading…"}
         </span>
-        {email && <span className="text-2xs text-muted-foreground">{email}</span>}
       </div>
 
       <MenuItem
@@ -165,10 +184,8 @@ function MenuItems({
         icon={<LogOut className="h-4 w-4" />}
         label="Log out"
         danger
-        onClick={() => {
-          haptics.warning();
-          logOut();
-        }}
+        onClick={handleLogout}
+        disabled={loggingOut}
       />
     </div>
   );
@@ -179,21 +196,26 @@ function MenuItem({
   label,
   onClick,
   danger,
+  disabled,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
   danger?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <motion.button
       whileTap={{ scale: 0.97 }}
       type="button"
       onClick={onClick}
+      disabled={disabled}
+      aria-busy={disabled || undefined}
       role="menuitem"
       className={cn(
         "flex w-full items-center gap-2.5 rounded-field px-3 py-2.5 text-left text-sm transition-colors",
-        danger ? "text-danger hover:bg-danger/10" : "text-foreground hover:bg-white/10"
+        danger ? "text-danger hover:bg-danger/10" : "text-foreground hover:bg-white/10",
+        disabled && "cursor-wait opacity-60"
       )}
     >
       {icon}

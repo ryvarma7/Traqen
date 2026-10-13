@@ -77,6 +77,12 @@ export type Note = {
   updated_at: string;
 };
 
+/** Columns needed to render and mutate the notes list without loading row metadata. */
+export type NoteListItem = Pick<
+  Note,
+  "id" | "title" | "content" | "pinned" | "color" | "private" | "updated_at"
+>;
+
 export type DropdownOption = {
   id: string;
   user_id: string;

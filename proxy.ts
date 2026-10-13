@@ -23,6 +23,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
+  // Actions authenticate at the mutation boundary and can write refreshed
+  // cookies themselves. Let logout run even with an expired/invalid session.
+  if (request.method === "POST" && request.headers.has("next-action")) {
+    return NextResponse.next({ request });
+  }
+
   const hasSessionCookie = request.cookies
     .getAll()
     .some((cookie) => cookie.name.startsWith("sb-") && cookie.name.includes("auth-token"));
@@ -41,35 +47,47 @@ export async function proxy(request: NextRequest) {
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet, headers) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
         response = NextResponse.next({ request });
         cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+        Object.entries(headers).forEach(([name, value]) => response.headers.set(name, value));
       },
     },
   });
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // Verified JWT claims avoid a second Auth API round trip before every page.
+  // Pages/actions still verify the user, and database reads remain RLS-scoped.
+  const { data, error } = await supabase.auth.getClaims();
+  const signedIn = !error && Boolean(data?.claims?.sub);
 
-  if (!user && !isAuthPage) {
+  if (!signedIn && !isAuthPage) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.search = "";
-    return NextResponse.redirect(redirectUrl);
+    return redirectWithCookies(response, redirectUrl);
   }
 
-  if (user && isAuthPage) {
+  if (signedIn && isAuthPage && request.method === "GET") {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/";
     redirectUrl.search = "";
-    return NextResponse.redirect(redirectUrl);
+    return redirectWithCookies(response, redirectUrl);
   }
 
   return response;
 }
 
+/** Preserve a refreshed Supabase session when auth checks also redirect. */
+function redirectWithCookies(response: NextResponse, url: URL) {
+  const redirectResponse = NextResponse.redirect(url);
+  response.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
+  redirectResponse.headers.set("Cache-Control", "private, no-store");
+  return redirectResponse;
+}
+
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|auth/callback|(?:manifest\\.webmanifest|sw\\.js)$|.*\\.(?:woff2?|png|svg|ico)$).*)",
+    "/((?!api(?:/|$)|_next/static|_next/image|favicon.ico|auth/callback|(?:manifest\\.webmanifest|sw\\.js)$|.*\\.(?:woff2?|png|svg|ico)$).*)",
   ],
 };

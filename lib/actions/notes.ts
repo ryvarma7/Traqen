@@ -15,6 +15,7 @@ const noteSchema = z.object({
   ),
   color: z.enum(["gray", "red", "orange", "amber", "green", "blue", "violet"]),
 });
+const noteIdSchema = z.string().uuid();
 
 export async function saveNote(
   values: Record<string, unknown>,
@@ -28,6 +29,9 @@ export async function saveNote(
 
   const parsed = noteSchema.safeParse(values);
   if (!parsed.success) return { error: "Please check the note fields." };
+  if (id !== undefined && !noteIdSchema.safeParse(id).success) {
+    return { error: "Unable to save this note." };
+  }
 
   const payload = {
     title: parsed.data.title,
@@ -38,34 +42,25 @@ export async function saveNote(
   };
 
   const { error } = id
-    ? await supabase.from("notes").update(payload).eq("id", id)
+    ? await supabase.from("notes").update(payload).eq("id", id).eq("user_id", user.id)
     : await supabase.from("notes").insert({ ...payload, user_id: user.id });
 
-  if (error) return { error: error.message };
+  if (error) return { error: "Unable to save this note." };
   revalidatePath("/");
   revalidatePath("/notes");
   return {};
 }
 
 export async function deleteNote(id: string): Promise<ActionResult> {
-  const supabase = await createClient();
-  const { error } = await supabase.from("notes").delete().eq("id", id);
-  if (error) return { error: error.message };
-  revalidatePath("/");
-  revalidatePath("/notes");
-  return {};
-}
+  if (!noteIdSchema.safeParse(id).success) {
+    return { error: "Unable to delete this note." };
+  }
 
-export async function setNotePrivacy(
-  id: string,
-  isPrivate: boolean
-): Promise<ActionResult> {
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("notes")
-    .update({ private: isPrivate })
-    .eq("id", id);
-  if (error) return { error: error.message };
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  const { error } = await supabase.from("notes").delete().eq("id", id).eq("user_id", user.id);
+  if (error) return { error: "Unable to delete this note." };
   revalidatePath("/");
   revalidatePath("/notes");
   return {};

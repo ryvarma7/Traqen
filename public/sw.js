@@ -1,10 +1,11 @@
-// Traqen service worker — caches the app shell for fast launches.
-// Supabase API calls are never cached (always network-first) so data stays fresh.
+// Traqen service worker — caches immutable static assets for fast launches.
+// HTML, RSC payloads, and Supabase API calls are never cached because they can
+// contain private, user-specific data.
 
-const CACHE_NAME = "traqen-shell-v1";
+const CACHE_NAME = "traqen-static-v2";
 
 self.addEventListener("install", (event) => {
-  // Precache nothing specific; pages get cached on first visit (see fetch).
+  // Precache nothing specific; static assets are cached on first visit.
   event.waitUntil(self.skipWaiting());
 });
 
@@ -40,7 +41,14 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation + static assets: network-first, fall back to cache when offline.
+  // Only cache immutable/static assets. HTML and RSC payloads contain
+  // user-specific data and must never be reused across auth sessions.
+  const isStaticAsset =
+    url.pathname.startsWith("/_next/static/") ||
+    /\.(?:css|js|woff2?|png|svg|ico)$/.test(url.pathname);
+  if (!isStaticAsset) return;
+
+  // Static assets: cache-first with a network refresh on misses.
   event.respondWith(
     fetch(request)
       .then((response) => {
@@ -51,10 +59,6 @@ self.addEventListener("fetch", (event) => {
       .catch(() =>
         caches.match(request).then((cached) => {
           if (cached) return cached;
-          // Offline fallback for navigations: serve the cached home page.
-          if (request.mode === "navigate") {
-            return caches.match("/");
-          }
           return Response.error();
         })
       )

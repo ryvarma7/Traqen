@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { readProfile } from "@/lib/supabase/profile";
 
-/** Signed-in user's own profile: username + login email. RLS scopes the
- *  read to auth.uid(), so the email never leaks to anyone but the owner. */
+/** Signed-in user's own display profile. RLS scopes the read to auth.uid(). */
 export async function GET() {
   const supabase = await createClient();
 
@@ -12,21 +12,26 @@ export async function GET() {
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized" }, {
+      status: 401, headers: { "Cache-Control": "private, no-store" },
+    });
   }
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("username, email_internal")
-    .eq("id", user.id)
-    .maybeSingle();
+  const { data, error } = await readProfile(supabase, user.id);
 
   if (error) {
-    return NextResponse.json({ error: "Failed to load profile" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to load profile" }, {
+      status: 500, headers: { "Cache-Control": "private, no-store" },
+    });
+  }
+
+  if (!data) {
+    return NextResponse.json({ error: "Profile is unavailable. Please try again." }, {
+      status: 503, headers: { "Cache-Control": "private, no-store" },
+    });
   }
 
   return NextResponse.json({
-    username: data?.username ?? null,
-    email: data?.email_internal ?? null,
-  });
+    username: data.username,
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }

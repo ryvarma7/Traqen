@@ -3,13 +3,13 @@
 import * as React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ChevronRight, Eye, EyeOff, StickyNote } from "lucide-react";
+import { ChevronRight, Eye, EyeOff, LoaderCircle, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { ColorDot } from "@/components/notes/color-dot";
 import { SegmentedTabs } from "@/components/hub/segmented-tabs";
-import { setNotePrivacy } from "@/lib/actions/notes";
 import { relativeTime } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
+import { updateNotePrivacy } from "@/lib/notes-privacy";
 
 export type NotePreview = {
   id: string;
@@ -38,18 +38,36 @@ export function NotesCarousel({ notes }: { notes: NotePreview[] }) {
   /** Optimistic overrides, mirroring the notes page: the card flips instantly
    *  and rolls back if the write fails. */
   const [privacy, setPrivacy] = React.useState<Record<string, boolean>>({});
+  const [privacyPending, setPrivacyPending] = React.useState<Record<string, boolean>>({});
 
   const isHidden = (note: NotePreview) => privacy[note.id] ?? note.private;
 
   const togglePrivacy = async (note: NotePreview) => {
+    if (privacyPending[note.id]) return;
+
     const next = !isHidden(note);
     haptics.toggle(next);
     setPrivacy((prev) => ({ ...prev, [note.id]: next }));
-    const result = await setNotePrivacy(note.id, next);
-    if (result.error) {
+    setPrivacyPending((prev) => ({ ...prev, [note.id]: true }));
+
+    let error: string | undefined;
+    try {
+      const result = await updateNotePrivacy(note.id, next);
+      error = result.error;
+    } catch {
+      error = "Unable to update note visibility.";
+    } finally {
+      setPrivacyPending((prev) => {
+        const nextPending = { ...prev };
+        delete nextPending[note.id];
+        return nextPending;
+      });
+    }
+
+    if (error) {
       setPrivacy((prev) => ({ ...prev, [note.id]: !next }));
       haptics.error();
-      toast.error(result.error);
+      toast.error(error);
     }
   };
 
@@ -126,15 +144,21 @@ export function NotesCarousel({ notes }: { notes: NotePreview[] }) {
                           e.stopPropagation();
                           togglePrivacy(note);
                         }}
+                        disabled={privacyPending[note.id]}
+                        aria-busy={privacyPending[note.id]}
                         aria-label={
-                          isHidden(note)
-                            ? "Show preview on overview"
-                            : "Hide preview on overview"
+                          privacyPending[note.id]
+                            ? "Updating note visibility"
+                            : isHidden(note)
+                              ? "Show preview on overview"
+                              : "Hide preview on overview"
                         }
                         title={isHidden(note) ? "Show preview" : "Hide preview"}
-                        className="relative z-10 -mr-1 rounded-field p-1 text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                        className="relative z-10 -mr-1 rounded-field p-1 text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground disabled:cursor-wait disabled:opacity-70"
                       >
-                        {isHidden(note) ? (
+                        {privacyPending[note.id] ? (
+                          <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                        ) : isHidden(note) ? (
                           <EyeOff className="h-3.5 w-3.5" />
                         ) : (
                           <Eye className="h-3.5 w-3.5" />

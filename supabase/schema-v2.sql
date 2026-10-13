@@ -37,6 +37,11 @@ alter table public.hackathons add column if not exists submission_link text;
 -- old database cannot expose internal email addresses through an RPC.
 drop function if exists public.get_email_for_username(text);
 
+-- Notes are commonly fetched as the latest rows for the authenticated user.
+-- Keep the RLS user filter and recency sort in one index.
+create index if not exists idx_notes_user_updated_at
+  on public.notes(user_id, updated_at desc);
+
 -- First Google sign-in: create the profiles row if it doesn't exist yet.
 -- Username is derived from the Google account's email local part. The real
 -- Google email never leaves auth.users — the UI only ever sees the username.
@@ -99,3 +104,43 @@ $$;
 
 grant execute on function public.ensure_profile() to authenticated;
 revoke all on function public.ensure_profile() from public, anon;
+
+-- Atomic display-name update used by the rename endpoint. Run this migration
+-- on existing projects so concurrent preference changes are not lost.
+create or replace function public.update_profile_username(p_username text)
+returns text
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_username text;
+begin
+  if auth.uid() is null then
+    return null;
+  end if;
+
+  if p_username is null
+     or char_length(p_username) < 2
+     or char_length(p_username) > 30
+     or btrim(p_username) <> p_username
+     or p_username ~ '[[:cntrl:]]' then
+    raise exception 'Invalid profile username' using errcode = '22023';
+  end if;
+
+  update public.profiles
+     set username = p_username,
+         preferences = jsonb_set(
+           coalesce(preferences, '{}'::jsonb),
+           '{name_set}',
+           'true'::jsonb,
+           true
+         )
+   where id = auth.uid()
+   returning username into v_username;
+
+  return v_username;
+end;
+$$;
+
+grant execute on function public.update_profile_username(text) to authenticated;
+revoke all on function public.update_profile_username(text) from public, anon;
