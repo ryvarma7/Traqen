@@ -99,7 +99,7 @@ export function TrackMenu({
         aria-expanded={open}
         aria-label="Track options"
         onClick={() => setOpen((v) => !v)}
-        className="focus-ring glass-btn-base glass-btn-outline flex h-10 w-10 items-center justify-center rounded-field text-base font-semibold leading-none text-foreground"
+        className="focus-ring glass-btn-base glass-btn-outline flex h-11 w-11 items-center justify-center rounded-field text-base font-semibold leading-none text-foreground"
       >
         ⋯
       </motion.button>

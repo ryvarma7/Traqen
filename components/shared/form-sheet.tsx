@@ -52,7 +52,7 @@ function SheetHeader({
         type="button"
         onClick={onClose}
         aria-label="Close"
-        className="glass-btn-base glass-btn-ghost flex h-8 w-8 items-center justify-center rounded-field text-muted-foreground hover:text-foreground"
+        className="glass-btn-base glass-btn-ghost flex h-11 w-11 items-center justify-center rounded-field text-muted-foreground hover:text-foreground"
       >
         <X className="h-4 w-4" />
       </motion.button>

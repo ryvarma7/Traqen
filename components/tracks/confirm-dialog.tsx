@@ -3,7 +3,7 @@
 import * as React from "react";
 import { motion } from "framer-motion";
 import { TriangleAlert } from "lucide-react";
-import { ThinkingOrb } from "thinking-orbs";
+import { LoadingBar } from "@/components/shared/loading-bar";
 import { ModalShell } from "@/components/shared/modal-shell";
 
 /** Centre-screen confirmation for destructive actions — replaces
@@ -59,7 +59,7 @@ export function ConfirmDialog({
             disabled={busy}
             className="glass-btn-base glass-btn-danger h-10 gap-2 rounded-field px-4 text-sm disabled:opacity-60"
           >
-            {busy && <ThinkingOrb state="solving" size={20} theme="light" />}
+            {busy && <LoadingBar className="h-1 w-10" />}
             {busy ? "Deleting…" : confirmLabel}
           </motion.button>
         </div>

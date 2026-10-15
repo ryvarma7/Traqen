@@ -284,7 +284,7 @@ export function TasksView({
                                     whileTap={{ scale: 0.97 }}
                                     type="button"
                                     onClick={() => moveTask(task, s)}
-                                  className="glass-btn-base glass-btn-outline min-h-[2.25rem] h-auto rounded-full px-3 text-2xs font-medium text-muted-foreground"
+                                  className="glass-btn-base glass-btn-outline min-h-11 h-auto rounded-full px-3 text-2xs font-medium text-muted-foreground"
                                   >
                                     → {s}
                                   </motion.button>
@@ -347,7 +347,7 @@ function TaskCardBody({
           type="button"
           aria-label="Edit task"
           onClick={onEdit}
-          className="shrink-0 rounded-field p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-field text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <Pencil className="h-3.5 w-3.5" />
         </button>

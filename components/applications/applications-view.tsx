@@ -403,7 +403,7 @@ export function ApplicationsView({
                           <motion.button
                             whileTap={{ scale: 0.97 }}
                             type="button"
-                            className="glass-btn-base glass-btn-outline flex h-10 w-full items-center justify-center gap-2 rounded-field text-sm font-medium text-foreground"
+                            className="glass-btn-base glass-btn-outline flex min-h-11 w-full items-center justify-center gap-2 rounded-field text-sm font-medium text-foreground"
                             onClick={() => {
                               haptics.tap();
                               setSheet({ open: true, editing: row.id });

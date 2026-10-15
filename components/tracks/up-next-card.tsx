@@ -3,8 +3,8 @@
 import * as React from "react";
 import { motion } from "framer-motion";
 import { Check, ExternalLink, PartyPopper } from "lucide-react";
-import { ThinkingOrb } from "thinking-orbs";
 import { CountdownPill } from "@/components/shared/countdown-pill";
+import { LoadingBar } from "@/components/shared/loading-bar";
 import { daysUntil, formatShortDate, relativeDays } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
 import type { TrackItem, TrackPhase } from "@/lib/types";
@@ -131,7 +131,7 @@ function UpNextBody({
           className="glass-btn-base glass-btn-primary h-11 flex-1 gap-2 rounded-field px-4 text-sm font-semibold disabled:opacity-70"
         >
           {busy ? (
-            <ThinkingOrb state="solving" size={20} theme="light" />
+            <LoadingBar className="h-1 w-10" />
           ) : (
             <Check className="h-4 w-4" strokeWidth={3} />
           )}

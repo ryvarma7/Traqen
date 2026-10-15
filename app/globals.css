@@ -341,13 +341,22 @@ body:has(.app-scene)::after {
     border: 1px solid rgba(255, 255, 255, 0.10);
   }
 
+  .mobile-top-bar {
+    padding-top: 0.5rem;
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+  }
+
+  .mobile-tab-bar-shell {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
   /* Clear the floating tab bar so the last row is never trapped under it.
      The plain value is the fallback: where `env()` isn't supported the
      `max()` declaration below is dropped as invalid, and without this the
      whole rule would leave main with no bottom padding at all. */
   .pb-tabbar {
     padding-bottom: 6.5rem;
-    padding-bottom: max(6.5rem, calc(env(safe-area-inset-bottom) + 6rem));
+    padding-bottom: max(6.5rem, calc(env(safe-area-inset-bottom) + 6.5rem));
   }
 
   /* Safe-area bottom padding for sheets/modals */
@@ -365,6 +374,31 @@ body:has(.app-scene)::after {
     outline-offset: 2px;
   }
 
+  /* Compact iOS-style loading indicator for blocking and inline states. */
+  .loading-bar {
+    position: relative;
+    display: inline-block;
+    flex: 0 0 auto;
+    overflow: hidden;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--color-fg) 18%, transparent);
+  }
+  .loading-bar::after {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 36%;
+    border-radius: inherit;
+    background: var(--color-fg);
+    content: "";
+    animation: loading-bar-slide 1.1s var(--ease-out) infinite;
+    transform: translate3d(-100%, 0, 0);
+  }
+
+  @keyframes loading-bar-slide {
+    0% { transform: translate3d(-100%, 0, 0); }
+    100% { transform: translate3d(380%, 0, 0); }
+  }
+
   /* Loading placeholder blocks for route skeletons. */
   .skeleton {
     border-radius: 6px;
@@ -378,6 +412,11 @@ body:has(.app-scene)::after {
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .loading-bar::after {
+      animation: none;
+      transform: translate3d(0, 0, 0);
+      width: 100%;
+    }
     .skeleton { animation: none; }
   }
 }

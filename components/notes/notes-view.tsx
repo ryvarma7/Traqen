@@ -212,7 +212,7 @@ export function NotesView({ notes }: { notes: NoteListItem[] }) {
               }}
               className="mb-3.5 flex min-h-32 w-full cursor-pointer break-inside-avoid flex-col rounded-card glass-tile glass-tile-hover p-4 text-left"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {note.color !== "gray" && <ColorDot color={note.color} />}
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                   {note.title}
@@ -234,7 +234,7 @@ export function NotesView({ notes }: { notes: NoteListItem[] }) {
                       e.stopPropagation();
                       togglePrivacy(note);
                     }}
-                    className="shrink-0 rounded-field p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-70"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-field text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-70"
                   >
                     {privacyPending[note.id] ? (
                       <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
@@ -294,7 +294,7 @@ export function NotesView({ notes }: { notes: NoteListItem[] }) {
             type="button"
             onClick={close}
             aria-label="Close"
-            className="glass-btn-base glass-btn-ghost flex h-8 w-8 shrink-0 items-center justify-center rounded-field text-muted-foreground hover:text-foreground"
+            className="glass-btn-base glass-btn-ghost flex h-11 w-11 shrink-0 items-center justify-center rounded-field text-muted-foreground hover:text-foreground"
           >
             <X className="h-4 w-4" />
           </motion.button>
@@ -322,7 +322,7 @@ export function NotesView({ notes }: { notes: NoteListItem[] }) {
                       setColor(c);
                     }}
                     className={cn(
-                      "flex h-7 w-7 items-center justify-center rounded-full transition-transform hover:scale-110",
+                      "flex h-11 w-11 items-center justify-center rounded-full transition-transform hover:scale-110",
                       color === c && "ring-2 ring-accent ring-offset-2 ring-offset-surface"
                     )}
                   >

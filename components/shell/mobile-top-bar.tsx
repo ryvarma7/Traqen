@@ -10,10 +10,7 @@ import { ProfileMenu } from "@/components/shell/profile-menu";
  */
 export function MobileTopBar() {
   return (
-    /* Fixed 40px row (the ProfileMenu button's height, unchanged) with the
-       logo centred inside it at 44px. It overflows 2px top and bottom rather
-       than growing the row, so nothing below this bar shifts. */
-    <div className="mb-5 flex h-10 items-center justify-between gap-2 md:hidden">
+    <div className="mobile-top-bar sticky top-0 z-30 -mx-4 mb-5 flex min-h-11 items-center justify-between gap-2 bg-background/90 px-4 pb-1 backdrop-blur-md md:hidden">
       <Link href="/" className="flex items-center transition-opacity hover:opacity-80">
         <Image
           src="/logo-main.svg"

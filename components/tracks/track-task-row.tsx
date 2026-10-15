@@ -3,8 +3,8 @@
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ExternalLink } from "lucide-react";
-import { ThinkingOrb } from "thinking-orbs";
 import { CountdownPill } from "@/components/shared/countdown-pill";
+import { LoadingBar } from "@/components/shared/loading-bar";
 import { formatShortDate } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
 import type { TrackItem } from "@/lib/types";
@@ -136,7 +136,7 @@ function StatusCheckbox({
         transition={{ duration: 0.25, ease: "easeOut" }}
       >
         {busy ? (
-          <ThinkingOrb state="solving" size={20} theme="dark" />
+          <LoadingBar className="w-3.5" />
         ) : (
           <AnimatePresence>
             {done && (

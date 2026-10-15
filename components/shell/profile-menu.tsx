@@ -71,7 +71,7 @@ export function ProfileMenu({ variant = "icon" }: { variant?: "icon" | "rail" })
           "select-none transition-all",
           isRail
             ? "focus-ring flex w-full items-center gap-2.5 rounded-field px-2 py-2 text-left hover:bg-white/[0.06]"
-            : "flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-sm font-semibold text-foreground hover:border-white/30 hover:bg-white/10 md:h-9 md:w-9"
+            : "flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/5 text-sm font-semibold text-foreground hover:border-white/30 hover:bg-white/10 md:h-9 md:w-9"
         )}
       >
         <span

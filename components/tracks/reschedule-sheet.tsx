@@ -3,9 +3,9 @@
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, CalendarSync, Check } from "lucide-react";
-import { ThinkingOrb } from "thinking-orbs";
 import { toast } from "sonner";
 import { FormSheet } from "@/components/shared/form-sheet";
+import { LoadingBar } from "@/components/shared/loading-bar";
 import { rescheduleTrackItems } from "@/lib/actions/tracks";
 import { formatShortDate, todayISO } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
@@ -190,7 +190,7 @@ export function RescheduleSheet({
                   className="glass-btn-base glass-btn-primary h-11 gap-2 rounded-field px-5 text-sm disabled:opacity-60"
                 >
                   {busy ? (
-                    <ThinkingOrb state="solving" size={20} theme="light" />
+                    <LoadingBar className="h-1 w-10" />
                   ) : (
                     <Check className="h-4 w-4" />
                   )}

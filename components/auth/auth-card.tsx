@@ -11,7 +11,7 @@ export function AuthCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-black px-4 py-10">
+    <div className="relative flex min-h-dvh items-center justify-center overflow-x-hidden bg-black px-4 py-10">
       <AuthBackground />
       <div className="relative w-full max-w-[400px]">
         {/* Logo — already white artwork on transparent ground.

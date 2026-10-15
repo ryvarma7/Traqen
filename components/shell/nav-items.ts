@@ -13,7 +13,7 @@ import {
 export type NavItem = {
   href: string;
   label: string;
-  /** Bottom-bar label — kept to ~4 chars so five icons plus "+" fit a phone. */
+  /** Bottom-bar label — kept short so all destinations fit on narrow phones. */
   short: string;
   icon: LucideIcon;
 };

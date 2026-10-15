@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ThinkingOrb } from "thinking-orbs";
+import { LoadingBar } from "@/components/shared/loading-bar";
 
-/** Full-screen thinking-orb overlay shown right after Google sign-in. */
+/** Full-screen loading overlay shown right after Google sign-in. */
 export function PostLoginLoader({
   initiallyActive,
 }: {
@@ -41,7 +41,7 @@ export function PostLoginLoader({
           aria-label="Loading"
           role="status"
         >
-          <ThinkingOrb state="solving" size={64} theme="dark" />
+          <LoadingBar />
         </motion.div>
       )}
     </AnimatePresence>

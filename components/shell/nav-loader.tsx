@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { ThinkingOrb } from "thinking-orbs";
+import { LoadingBar } from "@/components/shared/loading-bar";
 
 /** How long a navigation must run before the veil is allowed to appear. A
  *  section change that resolves faster than this never shows it, so quick
@@ -36,7 +36,7 @@ export function beginNav() {
  * Deliberately not a `loading.tsx`: a route-level fallback replaces the page
  * tree, which takes the sidebar and tab bar down with it and reads as a cold
  * boot. This layers over the live page instead — the content underneath stays
- * mounted and is only blurred, with the orb centred on top of it. So a section
+ * mounted and is only blurred, with the loading bar centred on top of it. So a section
  * change looks like the app refocusing, not like a new website opening.
  *
  * Start is captured from anchor clicks plus {@link beginNav}; end is the
@@ -83,11 +83,11 @@ export function NavLoader() {
     }, APPEAR_AFTER);
   }, [clear, end]);
 
-  // `document.body` is the portal target, so the orb can only render client-side.
+  // `document.body` is the portal target, so the loading bar can only render client-side.
   useEffect(() => setMounted(true), []);
 
-  /* Centre the orb on the content column, not the window. The column's left
-     edge sits past the sidebar on desktop, so a viewport-centred orb reads as
+  /* Centre the loading bar on the content column, not the window. The column's left
+     edge sits past the sidebar on desktop, so a viewport-centred bar reads as
      off to one side; and the column is often taller than the viewport, so it
      has to be the *visible* slice that's measured. Re-measured on scroll and
      resize, since either moves the column out from under a fixed element. */
@@ -204,13 +204,13 @@ export function NavLoader() {
         >
           {/* Blur spans the whole column, however long the page is. */}
           <div className="absolute inset-0 bg-black/25 backdrop-blur-[3px]" />
-          {/* The orb is portalled to <body> rather than positioned here: the
+          {/* The loading bar is portalled to <body> rather than positioned here: the
               blur-in entrance leaves a `transform` on <main>, and a
               transformed ancestor becomes the containing block for `fixed`
               children — so an in-tree `fixed inset-0` would centre on the
               full column height and sit off-screen on a long page. The box
               below is the column's visible slice, measured from the ref
-              above, which puts the orb dead centre of the content area. */}
+              above, which puts the bar dead centre of the content area. */}
           {mounted &&
             box &&
             createPortal(
@@ -229,7 +229,7 @@ export function NavLoader() {
                   exit={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
                   transition={{ duration: 0.25, ease: "easeOut" }}
                 >
-                  <ThinkingOrb state="solving" size={64} theme="dark" />
+                  <LoadingBar />
                 </motion.div>
               </div>,
               document.body

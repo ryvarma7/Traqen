@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { CountdownPill } from "@/components/shared/countdown-pill";
+import { LoadingBar } from "@/components/shared/loading-bar";
 import { setTaskStatus } from "@/lib/actions/tasks";
 import { haptics } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
@@ -215,6 +216,7 @@ export function TasksPanel({ tasks }: { tasks: HubTask[] }) {
                     role="checkbox"
                     aria-checked={done}
                     aria-label={done ? `Mark "${task.title}" not done` : `Mark "${task.title}" done`}
+                    aria-busy={busy.has(task.id) || undefined}
                     disabled={busy.has(task.id)}
                     onClick={() => toggle(task)}
                     whileTap={{ scale: 0.9 }}
@@ -230,18 +232,22 @@ export function TasksPanel({ tasks }: { tasks: HubTask[] }) {
                       transition={{ duration: 0.25, ease: "easeOut" }}
                       aria-hidden
                     >
-                      <AnimatePresence>
-                        {done && (
-                          <motion.span
-                            initial={{ opacity: 0, scale: 0.4 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.4 }}
-                            transition={{ duration: 0.15, ease: "easeOut" }}
-                          >
-                            <Check className="h-3 w-3 text-black" strokeWidth={3.5} />
-                          </motion.span>
-                        )}
-                      </AnimatePresence>
+                      {busy.has(task.id) ? (
+                        <LoadingBar className="h-1 w-3.5" />
+                      ) : (
+                        <AnimatePresence>
+                          {done && (
+                            <motion.span
+                              initial={{ opacity: 0, scale: 0.4 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.4 }}
+                              transition={{ duration: 0.15, ease: "easeOut" }}
+                            >
+                              <Check className="h-3 w-3 text-black" strokeWidth={3.5} />
+                            </motion.span>
+                          )}
+                        </AnimatePresence>
+                      )}
                     </motion.span>
                   </motion.button>
 

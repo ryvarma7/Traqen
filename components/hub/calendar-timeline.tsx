@@ -200,9 +200,13 @@ function WeekStrip({
                       key={e.id}
                       href={e.href}
                       title={e.title}
-                      className="block h-1.5 w-full rounded-full transition-opacity hover:opacity-80"
-                      style={{ background: sourceDot[e.source] }}
+                      className="flex h-11 w-full items-center rounded-field transition-opacity hover:opacity-80"
                     >
+                      <span
+                        aria-hidden
+                        className="block h-1.5 w-full rounded-full"
+                        style={{ background: sourceDot[e.source] }}
+                      />
                       <span className="sr-only">{e.title}</span>
                     </Link>
                   ))

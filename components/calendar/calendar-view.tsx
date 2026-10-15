@@ -70,7 +70,7 @@ export function CalendarView({
             }}
             whileTap={{ scale: 0.97 }}
             aria-label="Previous month"
-            className="glass-btn-base glass-btn-outline flex h-8 w-8 items-center justify-center rounded-field sm:h-9 sm:w-9"
+            className="glass-btn-base glass-btn-outline flex h-11 w-11 items-center justify-center rounded-field"
           >
             <ChevronLeft className="h-4 w-4 text-muted-foreground" />
           </motion.button>
@@ -82,7 +82,7 @@ export function CalendarView({
               setSelectedKey(todayKey);
             }}
             whileTap={{ scale: 0.97 }}
-            className="glass-btn-base glass-btn-outline h-8 rounded-field px-2.5 text-[11px] font-medium text-foreground sm:h-9 sm:px-3 sm:text-xs"
+            className="glass-btn-base glass-btn-outline min-h-11 rounded-field px-2.5 text-[11px] font-medium text-foreground sm:px-3 sm:text-xs"
           >
             Today
           </motion.button>
@@ -94,7 +94,7 @@ export function CalendarView({
             }}
             whileTap={{ scale: 0.97 }}
             aria-label="Next month"
-            className="glass-btn-base glass-btn-outline flex h-8 w-8 items-center justify-center rounded-field sm:h-9 sm:w-9"
+            className="glass-btn-base glass-btn-outline flex h-11 w-11 items-center justify-center rounded-field"
           >
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </motion.button>

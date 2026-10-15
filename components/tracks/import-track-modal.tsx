@@ -11,10 +11,10 @@ import {
   Globe,
   Sparkles,
 } from "lucide-react";
-import { ThinkingOrb } from "thinking-orbs";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { FormSheet } from "@/components/shared/form-sheet";
+import { LoadingBar } from "@/components/shared/loading-bar";
 import { beginNav } from "@/components/shell/nav-loader";
 import { importTrack } from "@/lib/actions/tracks";
 import { buildPrompt, parseTrackInput, type ParsedTrack } from "@/lib/tracks/contract";
@@ -473,7 +473,7 @@ export function ImportTrackModal({
                   onClick={handleSave}
                   className="glass-btn-base glass-btn-primary h-10 gap-2 rounded-field px-5 text-sm disabled:opacity-60"
                 >
-                  {saving ? <ThinkingOrb state="solving" size={20} theme="light" /> : <Check className="h-4 w-4" />}
+                  {saving ? <LoadingBar className="h-1 w-10" /> : <Check className="h-4 w-4" />}
                   {saving ? "Saving…" : "Start tracking"}
                 </motion.button>
               </div>
