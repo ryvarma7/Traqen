@@ -1,25 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { motion, type Variants } from "framer-motion";
+import { motion } from "framer-motion";
 import { ArrowRight, Briefcase, CalendarDays, ClipboardList, GraduationCap, StickyNote } from "lucide-react";
 import Link from "next/link";
 import { haptics } from "@/lib/haptics";
-
-const container: Variants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.07 } },
-};
-
-const card: Variants = {
-  hidden: { opacity: 0, filter: "blur(8px)", scale: 0.98 },
-  visible: {
-    opacity: 1,
-    filter: "blur(0px)",
-    scale: 1,
-    transition: { duration: 0.25, ease: "easeOut" },
-  },
-};
+import { useMotionPreferences } from "@/components/shared/motion-provider";
+import { blurIn, itemVariants, listVariants } from "@/lib/motion";
 
 export type HubCard = {
   href: string;
@@ -68,19 +55,20 @@ const iconStyles: Record<HubCard["icon"], { bg: string; iconColor: string; borde
 };
 
 export function NavCards({ cards }: { cards: HubCard[] }) {
+  const reducedMotion = useMotionPreferences();
   return (
     <motion.div
-      variants={container}
-      initial="hidden"
+      variants={listVariants}
+      initial={reducedMotion ? false : "hidden"}
       animate="visible"
       className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4"
     >
-      {cards.map(({ href, title, description, count, countLabel, icon }) => {
+      {cards.map(({ href, title, description, count, countLabel, icon }, index) => {
         const Icon = icons[icon];
         const style = iconStyles[icon];
 
         return (
-          <motion.div key={href} variants={card}>
+          <motion.div key={href} custom={index} variants={itemVariants} animate={reducedMotion ? blurIn.animate : undefined}>
             <motion.div
               whileHover={{ scale: 1.02, transition: { duration: 0.15 } }}
               whileTap={{ scale: 0.98 }}

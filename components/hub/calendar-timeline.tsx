@@ -16,6 +16,8 @@ import {
 import { parseDateOnly } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
+import { useMotionPreferences } from "@/components/shared/motion-provider";
+import { blurIn, listItemTransition } from "@/lib/motion";
 
 const TABS = [
   { key: "today", label: "Today" },
@@ -98,6 +100,7 @@ function DayTimeline({
   events: CalendarEvent[];
 }) {
   const hours = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i);
+  const reducedMotion = useMotionPreferences();
   const heading = parseDateOnly(dateKeyValue).toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
@@ -138,9 +141,9 @@ function DayTimeline({
               return (
                 <motion.div
                   key={event.id}
-                  initial={{ opacity: 0, filter: "blur(8px)" }}
-                  animate={{ opacity: 1, filter: "blur(0px)" }}
-                  transition={{ duration: 0.25, delay: Math.min(i, 6) * 0.04, ease: "easeOut" }}
+                  initial={reducedMotion ? false : blurIn.initial}
+                  animate={blurIn.animate}
+                  transition={reducedMotion ? { duration: 0 } : listItemTransition(i)}
                   className="absolute inset-x-1 px-1"
                   style={{ top: slot * 44 + 4 }}
                 >

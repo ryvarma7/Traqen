@@ -1,10 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { motion, type Variants } from "framer-motion";
-import { Eye, EyeOff, LoaderCircle, Pencil, Pin, Plus, Trash2, X } from "lucide-react";
+import { motion } from "framer-motion";
+import { Eye, EyeOff, LoaderCircle, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { ColorDot, NOTE_COLORS } from "@/components/notes/color-dot";
+import { NoteGrid } from "@/components/notes/note-grid";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,20 +20,6 @@ import { FabPlus } from "@/components/shared/fab-plus";
 import type { NoteListItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ModalShell } from "@/components/shared/modal-shell";
-
-const listVariants: Variants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.05 } },
-};
-const tileVariants: Variants = {
-  hidden: { opacity: 0, filter: "blur(8px)", scale: 0.98 },
-  visible: {
-    opacity: 1,
-    filter: "blur(0px)",
-    scale: 1,
-    transition: { duration: 0.25, ease: "easeOut" },
-  },
-};
 
 export function NotesView({ notes }: { notes: NoteListItem[] }) {
   const [viewingId, setViewingId] = React.useState<string | null>(null);
@@ -77,7 +64,7 @@ export function NotesView({ notes }: { notes: NoteListItem[] }) {
   useCreateShortcut(openNew);
   usePendingCreate(openNew);
 
-  const openNote = (note: NoteListItem) => {
+  const openNote = React.useCallback((note: NoteListItem) => {
     setTitle(note.title);
     setContent(note.content ?? "");
     setColor(note.color);
@@ -85,7 +72,7 @@ export function NotesView({ notes }: { notes: NoteListItem[] }) {
     setViewingId(note.id);
     setCreating(false);
     setEditing(false);
-  };
+  }, []);
 
   const close = () => {
     setViewingId(null);
@@ -132,10 +119,10 @@ export function NotesView({ notes }: { notes: NoteListItem[] }) {
 
   const isHidden = (note: NoteListItem) => privacy[note.id] ?? note.private;
 
-  const togglePrivacy = async (note: NoteListItem) => {
+  const togglePrivacy = React.useCallback(async (note: NoteListItem) => {
     if (privacyPending[note.id]) return;
 
-    const next = !isHidden(note);
+    const next = !(privacy[note.id] ?? note.private);
     haptics.toggle(next);
     setPrivacy((prev) => ({ ...prev, [note.id]: next }));
     setPrivacyPending((prev) => ({ ...prev, [note.id]: true }));
@@ -159,7 +146,7 @@ export function NotesView({ notes }: { notes: NoteListItem[] }) {
       haptics.error();
       toast.error(error);
     }
-  };
+  }, [privacy, privacyPending]);
 
   const startEditing = () => {
     if (!viewing) return;
@@ -190,77 +177,13 @@ export function NotesView({ notes }: { notes: NoteListItem[] }) {
           </motion.button>
         </div>
       ) : (
-        <motion.div
-          variants={listVariants}
-          initial="hidden"
-          animate="visible"
-          className="columns-1 gap-3.5 sm:columns-2 lg:columns-3"
-        >
-          {sorted.map((note) => (
-            <motion.div
-              key={note.id}
-              variants={tileVariants}
-              whileTap={{ scale: 0.98 }}
-              role="button"
-              tabIndex={0}
-              onClick={() => openNote(note)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  openNote(note);
-                }
-              }}
-              className="mb-3.5 flex min-h-32 w-full cursor-pointer break-inside-avoid flex-col rounded-card glass-tile glass-tile-hover p-4 text-left"
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                {note.color !== "gray" && <ColorDot color={note.color} />}
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                  {note.title}
-                </span>
-                {note.content && (
-                  <button
-                    type="button"
-                    aria-label={
-                      privacyPending[note.id]
-                        ? "Updating note visibility"
-                        : isHidden(note)
-                          ? "Show preview on notes page"
-                          : "Hide preview on notes page"
-                    }
-                    title={isHidden(note) ? "Show preview" : "Hide preview"}
-                    aria-busy={privacyPending[note.id]}
-                    disabled={privacyPending[note.id]}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      togglePrivacy(note);
-                    }}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-field text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-70"
-                  >
-                    {privacyPending[note.id] ? (
-                      <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                    ) : isHidden(note) ? (
-                      <EyeOff className="h-3.5 w-3.5" />
-                    ) : (
-                      <Eye className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                )}
-                {note.pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-              </div>
-              {note.content &&
-                (isHidden(note) ? (
-                  <p className="mt-1.5 text-xs italic text-muted-foreground">Content hidden</p>
-                ) : (
-                  <p className="mt-1.5 line-clamp-5 whitespace-pre-wrap break-words text-xs text-muted-foreground">
-                    {note.content}
-                  </p>
-                ))}
-              <span className="mt-auto pt-3 text-2xs text-muted-foreground">
-                {relativeTime(note.updated_at)}
-              </span>
-            </motion.div>
-          ))}
-        </motion.div>
+        <NoteGrid
+          notes={sorted}
+          privacy={privacy}
+          privacyPending={privacyPending}
+          onOpen={openNote}
+          onTogglePrivacy={togglePrivacy}
+        />
       )}
 
       {/* Floating add button with glowing Framer glass aesthetic */}

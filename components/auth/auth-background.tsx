@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { paintAuthContours } from "@/lib/auth-contours";
+import { createFrameScheduler } from "@/lib/frame-scheduler";
 
 /* ─── Breathing contour field ─────────────────────────────────────────────
     Nine noise-displaced rings centered behind the login card. A swell of
@@ -8,9 +10,6 @@ import * as React from "react";
     field reads as something alive rather than a static texture.
     One canvas, one rAF loop, DPR capped at 2, paused on hidden tabs,
     static single frame under prefers-reduced-motion. */
-
-const RINGS = 9;
-const TAU = Math.PI * 2;
 
 export function AuthBackground() {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
@@ -21,48 +20,30 @@ export function AuthBackground() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
     let raf = 0;
+    let width = 0;
+    let height = 0;
+    let time = 1200;
+    ctx.strokeStyle = getComputedStyle(canvas).getPropertyValue("--color-fg").trim();
+    ctx.lineWidth = 1;
 
     const fit = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = window.innerWidth * dpr;
-      canvas.height = window.innerHeight * dpr;
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // Resizing clears the canvas state, including the stroke style.
+      ctx.strokeStyle = getComputedStyle(canvas).getPropertyValue("--color-fg").trim();
+      ctx.lineWidth = 1;
+      paintAuthContours(ctx, width, height, preference.matches ? 1200 : time);
     };
 
     const draw = (t: number) => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      const s = t / 1000;
-      // centered behind the card; rings radiate out from the login form
-      const cx = w * 0.5;
-      const cy = h * 0.5;
-      const step = Math.min(w, h) * 0.085;
-      ctx.clearRect(0, 0, w, h);
-      ctx.strokeStyle = "#FFFFFF";
-      ctx.lineWidth = 1;
-      for (let k = 0; k < RINGS; k++) {
-        // each ring lags the one inside it — the breath travels outward
-        const wave = Math.sin(s * 0.5 - k * 0.55);
-        const glow = 0.5 + 0.5 * Math.sin(s * 0.5 - k * 0.55 + 0.4);
-        const base = 110 + k * step + wave * 12;
-        ctx.globalAlpha = (0.045 + 0.075 * glow) * (1 - k * 0.06);
-        ctx.beginPath();
-        for (let a = 0; a <= TAU + 0.06; a += 0.05) {
-          const n =
-            Math.sin(a * 3 + s * 0.21 + k * 0.7) * 9 +
-            Math.sin(a * 5 - s * 0.13 + k * 1.3) * 6 +
-            Math.sin(a * 2 - s * 0.3 + k) * 4;
-          const r = base + n;
-          const x = cx + Math.cos(a) * r;
-          const y = cy + Math.sin(a) * r;
-          if (a === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-        ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
+      time = t;
+      paintAuthContours(ctx, width, height, t);
     };
 
     const loop = (t: number) => {
@@ -72,21 +53,23 @@ export function AuthBackground() {
 
     const onVisibility = () => {
       cancelAnimationFrame(raf);
-      if (!document.hidden && !reduced) raf = requestAnimationFrame(loop);
+      if (document.hidden) return;
+      if (preference.matches) paintAuthContours(ctx, width, height, 1200);
+      else raf = requestAnimationFrame(loop);
     };
 
     fit();
-    if (reduced) {
-      draw(1200); // calm static frame for reduced motion
-    } else {
-      raf = requestAnimationFrame(loop);
-    }
-    window.addEventListener("resize", fit);
+    onVisibility();
+    const resize = createFrameScheduler(fit);
+    window.addEventListener("resize", resize.schedule, { passive: true });
     document.addEventListener("visibilitychange", onVisibility);
+    preference.addEventListener("change", onVisibility);
     return () => {
       cancelAnimationFrame(raf);
-      window.removeEventListener("resize", fit);
+      resize.cancel();
+      window.removeEventListener("resize", resize.schedule);
       document.removeEventListener("visibilitychange", onVisibility);
+      preference.removeEventListener("change", onVisibility);
     };
   }, []);
 

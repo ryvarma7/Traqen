@@ -10,6 +10,8 @@ import { LoadingBar } from "@/components/shared/loading-bar";
 import { setTaskStatus } from "@/lib/actions/tasks";
 import { haptics } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
+import { useMotionPreferences } from "@/components/shared/motion-provider";
+import { blurIn, listItemTransition } from "@/lib/motion";
 
 export type HubTask = {
   id: string;
@@ -42,6 +44,7 @@ const toastId = (taskId: string) => `task-done-${taskId}`;
  * from a list that deletes on click.
  */
 export function TasksPanel({ tasks }: { tasks: HubTask[] }) {
+  const reducedMotion = useMotionPreferences();
   const [rows, setRows] = React.useState(tasks);
   const [busy, setBusy] = React.useState<Set<string>>(() => new Set());
   /** Finished rows still inside their settle window — rendered, but held out
@@ -204,11 +207,11 @@ export function TasksPanel({ tasks }: { tasks: HubTask[] }) {
               return (
                 <motion.li
                   key={task.id}
-                  layout
-                  initial={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
-                  animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
-                  exit={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
-                  transition={{ duration: 0.25, delay: Math.min(i, 6) * 0.04, ease: "easeOut" }}
+                  layout={reducedMotion ? false : "position"}
+                  initial={reducedMotion ? false : blurIn.initial}
+                  animate={blurIn.animate}
+                  exit={reducedMotion ? { opacity: 0 } : blurIn.exit}
+                  transition={reducedMotion ? { duration: 0 } : listItemTransition(i)}
                   className="flex items-center gap-3 border-b border-white/[0.06] py-2.5 last:border-b-0"
                 >
                   <motion.button

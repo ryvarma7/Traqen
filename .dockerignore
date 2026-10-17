@@ -1,0 +1,11 @@
+.git
+.next
+node_modules
+.env*
+!.env.example
+.agents
+.claude
+.acl-recovery
+agent
+*.tsbuildinfo
+*.log

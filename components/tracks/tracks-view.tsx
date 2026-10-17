@@ -1,31 +1,19 @@
 "use client";
 
 import * as React from "react";
-import { motion, type Variants } from "framer-motion";
+import { motion } from "framer-motion";
 import { CalendarDays, GraduationCap, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ImportTrackModal } from "@/components/tracks/import-track-modal";
 import { FabPlus } from "@/components/shared/fab-plus";
+import { useMotionPreferences } from "@/components/shared/motion-provider";
 import { deleteTrack } from "@/lib/actions/tracks";
 import { useCreateShortcut, usePendingCreate } from "@/lib/create-bus";
 import { formatShortDate } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
+import { blurIn, itemVariants, listVariants } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-
-const listVariants: Variants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.06 } },
-};
-const cardVariants: Variants = {
-  hidden: { opacity: 0, filter: "blur(8px)", scale: 0.98 },
-  visible: {
-    opacity: 1,
-    filter: "blur(0px)",
-    scale: 1,
-    transition: { duration: 0.25, ease: "easeOut" },
-  },
-};
 
 export type TrackSummary = {
   id: string;
@@ -47,6 +35,7 @@ const STATUS_TONES: Record<TrackSummary["status"], string> = {
 };
 
 export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
+  const reduceMotion = useMotionPreferences();
   const [importOpen, setImportOpen] = React.useState(false);
 
   // The mobile tab bar's "+" and the hub's quick-action pill both land here.
@@ -78,7 +67,7 @@ export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
             turns it into a visual roadmap you can check off step by step.
           </p>
           <motion.button
-            whileTap={{ scale: 0.97 }}
+            whileTap={reduceMotion ? undefined : { scale: 0.97 }}
             type="button"
             onClick={() => setImportOpen(true)}
             className="mt-5 glass-btn-base glass-btn-primary h-10 gap-2 rounded-field px-4 text-sm"
@@ -88,16 +77,28 @@ export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
         </div>
       ) : (
         <motion.div
-          variants={listVariants}
-          initial="hidden"
-          animate="visible"
+          variants={reduceMotion ? undefined : listVariants}
+          initial={reduceMotion ? false : "hidden"}
+          animate={reduceMotion ? undefined : "visible"}
           className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
         >
-          {tracks.map((track) => {
+          {tracks.map((track, index) => {
             const pct = track.total > 0 ? Math.round((track.done / track.total) * 100) : 0;
             return (
-              <motion.div key={track.id} variants={cardVariants} className="h-full">
-                <motion.div whileTap={{ scale: 0.985 }} className="group relative h-full">
+              <motion.div
+                key={track.id}
+                custom={index}
+                variants={reduceMotion ? undefined : itemVariants}
+                initial={reduceMotion ? false : undefined}
+                animate={reduceMotion ? blurIn.animate : undefined}
+                transition={reduceMotion ? { duration: 0 } : undefined}
+                layout={reduceMotion ? false : "position"}
+                className="h-full"
+              >
+                <motion.div
+                  whileTap={reduceMotion ? undefined : { scale: 0.985 }}
+                  className="group relative h-full"
+                >
                   <Link
                     href={`/tracks/${track.id}`}
                     className="flex h-full flex-col rounded-card glass-tile glass-tile-hover p-5"
@@ -134,10 +135,10 @@ export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
                       </div>
                       <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/8">
                         <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${pct}%` }}
-                          transition={{ duration: 0.7, ease: "easeOut", delay: 0.15 }}
-                          className="h-full rounded-full bg-white"
+                          initial={reduceMotion ? false : { scaleX: 0 }}
+                          animate={{ scaleX: pct / 100 }}
+                          transition={reduceMotion ? { duration: 0 } : { duration: 0.7, ease: "easeOut", delay: 0.15 }}
+                          className="h-full w-full origin-left rounded-full bg-white"
                         />
                       </div>
 

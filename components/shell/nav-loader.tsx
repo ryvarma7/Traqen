@@ -5,6 +5,9 @@ import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { LoadingBar } from "@/components/shared/loading-bar";
+import { useMotionPreferences } from "@/components/shared/motion-provider";
+import { createFrameScheduler } from "@/lib/frame-scheduler";
+import { blurIn, blurInTransition } from "@/lib/motion";
 
 /** How long a navigation must run before the veil is allowed to appear. A
  *  section change that resolves faster than this never shows it, so quick
@@ -43,6 +46,7 @@ export function beginNav() {
  * pathname committing.
  */
 export function NavLoader() {
+  const reducedMotion = useMotionPreferences();
   const pathname = usePathname();
   const [visible, setVisible] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -74,6 +78,7 @@ export function NavLoader() {
 
   const begin = useCallback(() => {
     clear(appearTimer);
+    clear(hideTimer);
     clear(watchdog);
     appearTimer.current = window.setTimeout(() => {
       appearTimer.current = null;
@@ -96,22 +101,30 @@ export function NavLoader() {
     if (!rect) return;
     const top = Math.max(rect.top, 0);
     const bottom = Math.min(rect.bottom, window.innerHeight);
-    setBox({
+    const next = {
       left: rect.left,
       width: rect.width,
       top,
       height: Math.max(bottom - top, 0),
-    });
+    };
+    setBox((previous) => previous &&
+      previous.left === next.left && previous.width === next.width &&
+      previous.top === next.top && previous.height === next.height ? previous : next);
   }, []);
 
   useEffect(() => {
     if (!visible) return;
     measure();
-    window.addEventListener("resize", measure);
-    window.addEventListener("scroll", measure, true);
+    const frame = createFrameScheduler(measure);
+    const observer = new ResizeObserver(frame.schedule);
+    if (columnRef.current) observer.observe(columnRef.current);
+    window.addEventListener("resize", frame.schedule, { passive: true });
+    window.addEventListener("scroll", frame.schedule, { capture: true, passive: true });
     return () => {
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("scroll", measure, true);
+      frame.cancel();
+      observer.disconnect();
+      window.removeEventListener("resize", frame.schedule);
+      window.removeEventListener("scroll", frame.schedule, true);
     };
   }, [visible, measure]);
 
@@ -193,29 +206,27 @@ export function NavLoader() {
         <motion.div
           key="nav-veil"
           ref={columnRef}
-          initial={{ opacity: 0 }}
+          initial={reducedMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
+          transition={{ duration: reducedMotion ? 0 : 0.2, ease: "easeOut" }}
           className="absolute inset-0 z-50"
           role="status"
           aria-label="Loading"
           aria-busy="true"
         >
-          {/* Blur spans the whole column, however long the page is. */}
-          <div className="absolute inset-0 bg-black/25 backdrop-blur-[3px]" />
-          {/* The loading bar is portalled to <body> rather than positioned here: the
-              blur-in entrance leaves a `transform` on <main>, and a
-              transformed ancestor becomes the containing block for `fixed`
-              children — so an in-tree `fixed inset-0` would centre on the
-              full column height and sit off-screen on a long page. The box
-              below is the column's visible slice, measured from the ref
-              above, which puts the bar dead centre of the content area. */}
+          {/* During the entrance main can be transformed. Portal the veil to
+              body so fixed positioning stays viewport-relative, and blur only
+              the visible slice rather than a potentially very tall page. */}
           {mounted &&
             box &&
             createPortal(
-              <div
-                className="pointer-events-none fixed z-[60] flex items-center justify-center"
+              <motion.div
+                initial={reducedMotion ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: reducedMotion ? 0 : 0.2, ease: "easeOut" }}
+                className="pointer-events-none fixed z-[60] flex items-center justify-center bg-background/25 backdrop-blur-[3px] motion-reduce:backdrop-blur-none"
                 style={{
                   left: box.left,
                   top: box.top,
@@ -224,14 +235,14 @@ export function NavLoader() {
                 }}
               >
                 <motion.div
-                  initial={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
-                  animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
-                  exit={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
-                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  initial={reducedMotion ? false : blurIn.initial}
+                  animate={blurIn.animate}
+                  exit={reducedMotion ? undefined : blurIn.exit}
+                  transition={reducedMotion ? { duration: 0 } : blurInTransition}
                 >
                   <LoadingBar />
                 </motion.div>
-              </div>,
+              </motion.div>,
               document.body
             )}
         </motion.div>

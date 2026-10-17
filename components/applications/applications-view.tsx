@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
+import dynamic from "next/dynamic";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUpDown,
   Briefcase,
@@ -12,11 +13,10 @@ import {
   StickyNote,
   Trophy,
 } from "lucide-react";
-import { HackathonForm } from "@/components/applications/hackathon-form";
-import { JobForm } from "@/components/applications/job-form";
 import { CountdownPill } from "@/components/shared/countdown-pill";
 import { FormSheet } from "@/components/shared/form-sheet";
 import { FabPlus } from "@/components/shared/fab-plus";
+import { useMotionPreferences } from "@/components/shared/motion-provider";
 import { NotesInline } from "@/components/shared/notes-inline";
 import { PriorityPill } from "@/components/shared/priority-pill";
 import { StatusPill } from "@/components/shared/status-pill";
@@ -29,6 +29,8 @@ import { useCreateShortcut, usePendingCreate } from "@/lib/create-bus";
 import { daysUntil } from "@/lib/dates";
 import { DEFAULT_OPTIONS, optionsForField } from "@/lib/defaults";
 import { haptics } from "@/lib/haptics";
+import { useIsMobile } from "@/lib/hooks";
+import { blurIn, blurInTransition, itemVariants, listVariants } from "@/lib/motion";
 import { priorityRank } from "@/lib/priority";
 import { cn } from "@/lib/utils";
 import type { DropdownOption, Hackathon, JobApplication } from "@/lib/types";
@@ -36,19 +38,27 @@ import type { DropdownOption, Hackathon, JobApplication } from "@/lib/types";
 type Tab = "jobs" | "hackathons";
 type SortKey = "name" | "status" | "priority" | "deadline";
 
-const listVariants: Variants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.05 } },
-};
-const itemVariants: Variants = {
-  hidden: { opacity: 0, filter: "blur(8px)", scale: 0.98 },
-  visible: {
-    opacity: 1,
-    filter: "blur(0px)",
-    scale: 1,
-    transition: { duration: 0.25, ease: "easeOut" },
-  },
-};
+const JobForm = dynamic(
+  () => import("@/components/applications/job-form").then((mod) => mod.JobForm),
+  {
+    loading: () => (
+      <p role="status" className="py-4 text-sm text-muted-foreground">
+        Loading application form…
+      </p>
+    ),
+  }
+);
+
+const HackathonForm = dynamic(
+  () => import("@/components/applications/hackathon-form").then((mod) => mod.HackathonForm),
+  {
+    loading: () => (
+      <p role="status" className="py-4 text-sm text-muted-foreground">
+        Loading hackathon form…
+      </p>
+    ),
+  }
+);
 
 export function ApplicationsView({
   jobs,
@@ -59,6 +69,9 @@ export function ApplicationsView({
   hackathons: Hackathon[];
   dropdownOptions: DropdownOption[];
 }) {
+  const isMobile = useIsMobile();
+  const reduceMotion = useMotionPreferences();
+  const detailsId = React.useId();
   const [tab, setTab] = React.useState<Tab>("jobs");
   const [statusFilter, setStatusFilter] = React.useState("All");
   const [sortKey, setSortKey] = React.useState<SortKey>("deadline");
@@ -160,7 +173,8 @@ export function ApplicationsView({
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="relative inline-flex w-full rounded-field border border-border bg-muted/60 p-1 md:w-fit">
           <motion.div
-            layout
+            layout={reduceMotion ? false : "position"}
+            layoutDependency={tab}
             transition={{ type: "spring", stiffness: 420, damping: 30 }}
             className={cn(
               "absolute inset-y-1 rounded-[7px] border border-white/10 bg-white/[0.06] shadow-[0_0_0_1px_rgba(255,255,255,0.02)]",
@@ -219,182 +233,196 @@ export function ApplicationsView({
           }
           onAdd={() => setSheet({ open: true, editing: null })}
         />
-      ) : (
-        <>
-          {/* Desktop table */}
-          <div className="hidden overflow-hidden rounded-card glass-section md:block">
-            <div className="overflow-x-auto">
-              <motion.table
-                key={tab}
-                variants={listVariants}
-                initial="hidden"
-                animate="visible"
-                className="w-full min-w-[720px] border-separate border-spacing-0"
-              >
-                <thead className="border-b border-border bg-muted/60">
-                  <tr>
-                    <SortableHeader label={tab === "jobs" ? "Company" : "Hackathon"} active={sortKey === "name"} onClick={() => toggleSort("name")} />
-                    <SortableHeader label="Status" active={sortKey === "status"} onClick={() => toggleSort("status")} />
-                    <SortableHeader label="Priority" active={sortKey === "priority"} onClick={() => toggleSort("priority")} />
-                    <SortableHeader label="Deadline" active={sortKey === "deadline"} onClick={() => toggleSort("deadline")} />
-                    <th className="px-3.5 py-2.5 text-left text-2xs font-medium uppercase tracking-wide text-muted-foreground">Follow-up</th>
-                    <th className="w-20" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => {
-                    const isJob = "company" in row;
-                    const expanded = expandedId === row.id;
-                    const name = isJob ? row.company : row.hackathon_name;
-                    const subtitleBits = isJob
-                      ? [row.role_type, row.location_mode, row.source]
-                      : [row.organizing_company, row.mode, row.type];
-                    const subtitle = subtitleBits.filter(Boolean).join(" · ");
-                    return (
-                      <React.Fragment key={row.id}>
-                        <motion.tr
-                          variants={itemVariants}
-                          className="group cursor-pointer transition-colors"
-                          onClick={() => {
-                            haptics.selection();
-                            setExpandedId(expanded ? null : row.id);
-                          }}
-                        >
-                          <td className="border-b border-border px-3.5 py-3 text-sm font-medium text-foreground group-hover:bg-muted/50">
-                            {name}
-                            {subtitle && (
-                              <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-                                {subtitle}
-                              </span>
-                            )}
+      ) : !isMobile ? (
+        /* Desktop table — only the active responsive tree is mounted. */
+        <div className="hidden overflow-hidden rounded-card glass-section md:block">
+          <div className="overflow-x-auto">
+            <motion.table
+              key={tab}
+              variants={listVariants}
+              initial={reduceMotion ? false : "hidden"}
+              animate="visible"
+              className="w-full min-w-[720px] border-separate border-spacing-0"
+            >
+              <thead className="border-b border-border bg-muted/60">
+                <tr>
+                  <SortableHeader label={tab === "jobs" ? "Company" : "Hackathon"} active={sortKey === "name"} onClick={() => toggleSort("name")} />
+                  <SortableHeader label="Status" active={sortKey === "status"} onClick={() => toggleSort("status")} />
+                  <SortableHeader label="Priority" active={sortKey === "priority"} onClick={() => toggleSort("priority")} />
+                  <SortableHeader label="Deadline" active={sortKey === "deadline"} onClick={() => toggleSort("deadline")} />
+                  <th className="px-3.5 py-2.5 text-left text-2xs font-medium uppercase tracking-wide text-muted-foreground">Follow-up</th>
+                  <th className="w-20" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => {
+                  const isJob = "company" in row;
+                  const expanded = expandedId === row.id;
+                  const name = isJob ? row.company : row.hackathon_name;
+                  const subtitleBits = isJob
+                    ? [row.role_type, row.location_mode, row.source]
+                    : [row.organizing_company, row.mode, row.type];
+                  const subtitle = subtitleBits.filter(Boolean).join(" · ");
+                  return (
+                    <React.Fragment key={row.id}>
+                      <motion.tr
+                        variants={itemVariants}
+                        animate={reduceMotion ? blurIn.animate : undefined}
+                        transition={reduceMotion ? { duration: 0 } : undefined}
+                        custom={index}
+                        layout={reduceMotion ? false : "position"}
+                        layoutDependency={rows}
+                        className="group cursor-pointer transition-colors"
+                        onClick={() => {
+                          haptics.selection();
+                          setExpandedId(expanded ? null : row.id);
+                        }}
+                      >
+                        <td className="border-b border-border px-3.5 py-3 text-sm font-medium text-foreground group-hover:bg-muted/50">
+                          {name}
+                          {subtitle && (
+                            <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                              {subtitle}
+                            </span>
+                          )}
+                        </td>
+                        <td className="border-b border-border px-3.5 py-3 group-hover:bg-muted/50">
+                          <StatusPill status={row.status} />
+                        </td>
+                        <td className="border-b border-border px-3.5 py-3 group-hover:bg-muted/50">
+                          <PriorityPill priority={row.priority} />
+                        </td>
+                        <td className="border-b border-border px-3.5 py-3 group-hover:bg-muted/50">
+                          {row.deadline ? (
+                            <CountdownPill date={row.deadline} />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="border-b border-border px-3.5 py-3 group-hover:bg-muted/50">
+                          {row.follow_up_date ? (
+                            <CountdownPill date={row.follow_up_date} />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="border-b border-border px-2.5 py-3 text-right group-hover:bg-muted/50">
+                          <div className="flex items-center justify-end gap-0.5">
+                            <button
+                              type="button"
+                              aria-label="Edit"
+                              className="glass-btn-base glass-btn-ghost rounded-field p-1.5 text-muted-foreground opacity-0 transition-all hover:text-foreground group-hover:opacity-100"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                haptics.tap();
+                                setSheet({ open: true, editing: row.id });
+                              }}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <ChevronDown
+                              className={cn(
+                                "h-4 w-4 text-muted-foreground transition-transform",
+                                expanded && "rotate-180"
+                              )}
+                            />
+                          </div>
+                        </td>
+                      </motion.tr>
+                      {expanded && (
+                        <tr>
+                          <td colSpan={6} className="border-b border-border bg-muted/40 px-4 py-4 align-top">
+                            <motion.div
+                              {...blurIn}
+                              initial={reduceMotion ? false : blurIn.initial}
+                              transition={reduceMotion ? { duration: 0 } : blurInTransition}
+                              className="grid gap-6 md:grid-cols-2"
+                            >
+                              <div>
+                                <DetailGrid row={row} />
+                                <motion.button
+                                  whileTap={{ scale: 0.97 }}
+                                  type="button"
+                                  className="glass-btn-base glass-btn-outline mt-4 h-9 gap-2 rounded-field px-3.5 text-sm font-medium text-foreground"
+                                  onClick={() => {
+                                    haptics.tap();
+                                    setSheet({ open: true, editing: row.id });
+                                  }}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" /> Edit full details
+                                </motion.button>
+                              </div>
+                              <NotesSection notes={row.notes} onSave={saveNotesFor(row)} />
+                            </motion.div>
                           </td>
-                          <td className="border-b border-border px-3.5 py-3 group-hover:bg-muted/50">
-                            <StatusPill status={row.status} />
-                          </td>
-                          <td className="border-b border-border px-3.5 py-3 group-hover:bg-muted/50">
-                            <PriorityPill priority={row.priority} />
-                          </td>
-                          <td className="border-b border-border px-3.5 py-3 group-hover:bg-muted/50">
-                            {row.deadline ? (
-                              <CountdownPill date={row.deadline} />
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
-                          </td>
-                          <td className="border-b border-border px-3.5 py-3 group-hover:bg-muted/50">
-                            {row.follow_up_date ? (
-                              <CountdownPill date={row.follow_up_date} />
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
-                          </td>
-                          <td className="border-b border-border px-2.5 py-3 text-right group-hover:bg-muted/50">
-                            <div className="flex items-center justify-end gap-0.5">
-                              <button
-                                type="button"
-                                aria-label="Edit"
-                                className="glass-btn-base glass-btn-ghost rounded-field p-1.5 text-muted-foreground opacity-0 transition-all hover:text-foreground group-hover:opacity-100"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  haptics.tap();
-                                  setSheet({ open: true, editing: row.id });
-                                }}
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                              <ChevronDown
-                                className={cn(
-                                  "h-4 w-4 text-muted-foreground transition-transform",
-                                  expanded && "rotate-180"
-                                )}
-                              />
-                            </div>
-                          </td>
-                        </motion.tr>
-                        {expanded && (
-                          <tr>
-                            <td colSpan={6} className="border-b border-border bg-muted/40 px-4 py-4 align-top">
-                              <motion.div
-                                initial={{ opacity: 0, y: -4 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="grid gap-6 md:grid-cols-2"
-                              >
-                                <div>
-                                  <DetailGrid row={row} />
-                                  <motion.button
-                                    whileTap={{ scale: 0.97 }}
-                                    type="button"
-                                    className="glass-btn-base glass-btn-outline mt-4 h-9 gap-2 rounded-field px-3.5 text-sm font-medium text-foreground"
-                                    onClick={() => {
-                                      haptics.tap();
-                                      setSheet({ open: true, editing: row.id });
-                                    }}
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" /> Edit full details
-                                  </motion.button>
-                                </div>
-                                <NotesSection notes={row.notes} onSave={saveNotesFor(row)} />
-                              </motion.div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </motion.table>
-            </div>
-          </div>
-
-          {/* Mobile card stack */}
-          <motion.div
-            key={`${tab}-cards`}
-            variants={listVariants}
-            initial="hidden"
-            animate="visible"
-            className="space-y-2.5 md:hidden"
-          >
-            {rows.map((row) => {
-              const isJob = "company" in row;
-              const expanded = expandedId === row.id;
-              const name = isJob ? row.company : row.hackathon_name;
-              return (
-                <motion.div
-                  key={row.id}
-                  variants={itemVariants}
-                  className="rounded-card glass-tile glass-tile-hover overflow-hidden"
-                >
-                  <button
-                    type="button"
-                    className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left"
-                    onClick={() => {
-                      haptics.selection();
-                      setExpandedId(expanded ? null : row.id);
-                    }}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">{name}</p>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                        <StatusPill status={row.status} />
-                        <PriorityPill priority={row.priority} />
-                        {row.deadline && <CountdownPill date={row.deadline} />}
-                      </div>
-                    </div>
-                    <ChevronDown
-                      className={cn(
-                        "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
-                        expanded && "rotate-180"
+                        </tr>
                       )}
-                    />
-                  </button>
-                  <AnimatePresence>
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </motion.table>
+          </div>
+        </div>
+      ) : (
+        /* Mobile card stack */
+        <motion.div
+          key={`${tab}-cards`}
+          variants={listVariants}
+          initial={reduceMotion ? false : "hidden"}
+          animate="visible"
+          className="space-y-2.5 md:hidden"
+        >
+          {rows.map((row, index) => {
+            const isJob = "company" in row;
+            const expanded = expandedId === row.id;
+            const name = isJob ? row.company : row.hackathon_name;
+            const panelId = `${detailsId}-${tab}-${row.id}`;
+            return (
+              <motion.div
+                key={row.id}
+                variants={itemVariants}
+                animate={reduceMotion ? blurIn.animate : undefined}
+                transition={reduceMotion ? { duration: 0 } : undefined}
+                custom={index}
+                layout={reduceMotion ? false : "position"}
+                layoutDependency={rows}
+                className="rounded-card glass-tile glass-tile-hover overflow-hidden"
+              >
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  aria-controls={panelId}
+                  className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left"
+                  onClick={() => {
+                    haptics.selection();
+                    setExpandedId(expanded ? null : row.id);
+                  }}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">{name}</p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <StatusPill status={row.status} />
+                      <PriorityPill priority={row.priority} />
+                      {row.deadline && <CountdownPill date={row.deadline} />}
+                    </div>
+                  </div>
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                      expanded && "rotate-180"
+                    )}
+                  />
+                </button>
+                <div id={panelId} aria-hidden={!expanded} inert={!expanded}>
+                  <AnimatePresence initial={false}>
                     {expanded && (
                       <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
+                        key={panelId}
+                        {...blurIn}
+                        initial={reduceMotion ? false : blurIn.initial}
+                        exit={reduceMotion ? undefined : blurIn.exit}
+                        transition={reduceMotion ? { duration: 0 } : blurInTransition}
                         className="overflow-hidden"
                       >
                         <div className="border-t border-border bg-muted/40 px-4 py-4 space-y-4">
@@ -415,11 +443,11 @@ export function ApplicationsView({
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </motion.div>
-              );
-            })}
-          </motion.div>
-        </>
+                </div>
+              </motion.div>
+            );
+          })}
+        </motion.div>
       )}
 
       {/* Floating add button */}
@@ -440,6 +468,7 @@ export function ApplicationsView({
             : `Add ${noun}`
         }
       >
+        {/* FormSheet gates mounting and retains the form throughout its exit. */}
         {tab === "jobs" ? (
           <JobForm
             item={editingJob}

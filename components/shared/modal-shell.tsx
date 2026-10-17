@@ -5,6 +5,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
 import { haptics } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
+import { useMotionPreferences } from "@/components/shared/motion-provider";
+import { blurIn, blurInTransition } from "@/lib/motion";
 
 const spring = { type: "spring", stiffness: 380, damping: 34 } as const;
 
@@ -21,6 +23,7 @@ export function ModalShell({
   panelClassName?: string;
   variant?: "centered" | "sheet";
 }) {
+  const reducedMotion = useMotionPreferences();
   React.useEffect(() => {
     if (!open) return;
 
@@ -45,17 +48,17 @@ export function ModalShell({
     <AnimatePresence>
       {open && (
         <motion.div
-          initial={{ opacity: 0 }}
+          initial={reducedMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
+          transition={{ duration: reducedMotion ? 0 : 0.2 }}
           className="fixed inset-0 z-50 overflow-y-auto"
         >
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={reducedMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: reducedMotion ? 0 : 0.2 }}
             className="fixed inset-0 z-0 bg-black/70"
             onClick={onClose}
           />
@@ -70,21 +73,21 @@ export function ModalShell({
           >
             <motion.div
               initial={
-                variant === "sheet"
+                reducedMotion ? false : variant === "sheet"
                   ? { y: "100%" }
-                  : { opacity: 0, filter: "blur(8px)", scale: 0.98 }
+                  : blurIn.initial
               }
               animate={
                 variant === "sheet"
                   ? { y: 0 }
-                  : { opacity: 1, filter: "blur(0px)", scale: 1 }
+                  : blurIn.animate
               }
               exit={
-                variant === "sheet"
+                reducedMotion ? { opacity: 0 } : variant === "sheet"
                   ? { y: "100%" }
-                  : { opacity: 0, filter: "blur(8px)", scale: 0.98 }
+                  : blurIn.exit
               }
-              transition={variant === "sheet" ? spring : { duration: 0.25, ease: "easeOut" }}
+              transition={reducedMotion ? { duration: 0 } : variant === "sheet" ? spring : blurInTransition}
               className={cn(
                 "relative z-10 max-h-[90dvh] flex flex-col overflow-hidden glass-modal",
                 variant === "sheet"

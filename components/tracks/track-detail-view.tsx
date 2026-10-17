@@ -6,6 +6,7 @@ import { ArrowLeft, Flag, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useMotionPreferences } from "@/components/shared/motion-provider";
 import { ConfirmDialog } from "@/components/tracks/confirm-dialog";
 import { beginNav } from "@/components/shell/nav-loader";
 import { PhaseAccordion, PhaseRail, PhaseTasks } from "@/components/tracks/phase-list";
@@ -20,6 +21,7 @@ import {
 } from "@/lib/actions/tracks";
 import { relativeDays } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
+import { useIsMobile } from "@/lib/hooks";
 import { buildPhaseProgress, nextDueItem, paceOf, upNextItem } from "@/lib/track-plan";
 import type { LearningTrack, TrackItem, TrackPhase } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -33,9 +35,8 @@ const STEP_UNDO_MS = 6000;
  *  every toast on screen. */
 const trackToastId = (itemId: string) => `track-step-done-${itemId}`;
 
-/** Scopes the reduced-motion opt-out to this page: framer drops transform and
- *  opacity animations for anyone who has `prefers-reduced-motion` set, without
- *  changing behaviour for the rest of the app. */export function TrackDetailView(
+/** The shared provider also handles blur and entrance-delay preferences. */
+export function TrackDetailView(
   props: {
     track: LearningTrack;
     phases: TrackPhase[];
@@ -59,6 +60,7 @@ function TrackDetail({
   items: TrackItem[];
 }) {
   const router = useRouter();
+  const isMobile = useIsMobile();
 
   const [localItems, setLocalItems] = React.useState(items);
   const [localTrack, setLocalTrack] = React.useState(track);
@@ -271,7 +273,7 @@ function TrackDetail({
 
       {/* ── Desktop: sticky phase rail + the plan ────────────────────────── */}
       <div className="grid gap-6 md:grid-cols-[260px_minmax(0,1fr)] md:gap-7">
-        <PhaseRail progress={progress} selectedId={selectedId} onSelect={focusPhase} />
+        {!isMobile && <PhaseRail progress={progress} selectedId={selectedId} onSelect={focusPhase} />}
 
         <div className="min-w-0 space-y-5">
           <UpNextCard
@@ -282,18 +284,18 @@ function TrackDetail({
             onMarkDone={toggleItem}
           />
 
-          <div className="hidden md:block">
+          {!isMobile && <div className="hidden md:block">
             <PhaseTasks
               progress={progress.find((p) => p.phase.id === selectedId)}
               busyIds={busyIds}
               onItemToggle={toggleItem}
             />
-          </div>
+          </div>}
         </div>
       </div>
 
       {/* ── Mobile: the same plan, one phase at a time ───────────────────── */}
-      <div className="md:hidden">
+      {isMobile && <div className="md:hidden">
         <PhaseAccordion
           progress={progress}
           openId={openPhaseId}
@@ -304,7 +306,7 @@ function TrackDetail({
           busyIds={busyIds}
           onItemToggle={toggleItem}
         />
-      </div>
+      </div>}
 
       {overlays}
     </div>
@@ -330,6 +332,8 @@ function Header({
   nextDue: { item: TrackItem; days: number } | null;
   menu: React.ReactNode;
 }) {
+  const reduceMotion = useMotionPreferences();
+
   return (
     <header className="rounded-card glass-section p-4 md:p-6">
       <div className="flex items-start gap-3">
@@ -370,9 +374,9 @@ function Header({
         >
           <motion.div
             initial={false}
-            animate={{ width: `${pct}%` }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-            className="h-full rounded-full bg-white"
+            animate={{ scaleX: pct / 100 }}
+            transition={reduceMotion ? { duration: 0 } : { duration: 0.5, ease: "easeOut" }}
+            className="h-full w-full origin-left rounded-full bg-white"
           />
         </div>
       </div>

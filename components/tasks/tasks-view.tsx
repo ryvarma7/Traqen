@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
+import dynamic from "next/dynamic";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowDownNarrowWide,
   ArrowUpNarrowWide,
@@ -15,12 +16,14 @@ import { toast } from "sonner";
 import { FormSheet } from "@/components/shared/form-sheet";
 import { FabPlus } from "@/components/shared/fab-plus";
 import { CountdownPill } from "@/components/shared/countdown-pill";
+import { useMotionPreferences } from "@/components/shared/motion-provider";
 import { PriorityPill } from "@/components/shared/priority-pill";
-import { TaskForm } from "@/components/tasks/task-form";
 import { setTaskStatus } from "@/lib/actions/tasks";
 import { useCreateShortcut, usePendingCreate } from "@/lib/create-bus";
 import { daysUntil } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
+import { useIsMobile } from "@/lib/hooks";
+import { blurIn, blurInTransition, itemVariants, listVariants } from "@/lib/motion";
 import { priorityRank } from "@/lib/priority";
 import { TASK_STATUSES, type Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -33,25 +36,25 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "title", label: "A–Z" },
 ];
 
-const listVariants: Variants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.05 } },
-};
-const itemVariants: Variants = {
-  hidden: { opacity: 0, filter: "blur(8px)", scale: 0.98 },
-  visible: {
-    opacity: 1,
-    filter: "blur(0px)",
-    scale: 1,
-    transition: { duration: 0.25, ease: "easeOut" },
-  },
-};
+const TaskForm = dynamic(
+  () => import("@/components/tasks/task-form").then((mod) => mod.TaskForm),
+  {
+    loading: () => (
+      <p role="status" className="py-4 text-sm text-muted-foreground">
+        Loading task form…
+      </p>
+    ),
+  }
+);
 
 export function TasksView({
   tasks,
 }: {
   tasks: Task[];
 }) {
+  const isMobile = useIsMobile();
+  const reduceMotion = useMotionPreferences();
+  const accordionId = React.useId();
   const [sheet, setSheet] = React.useState<{ open: boolean; editing: string | null; preset: string }>({
     open: false,
     editing: null,
@@ -179,132 +182,159 @@ export function TasksView({
             </motion.button>
           </div>
 
-          {/* Desktop: Kanban columns */}
-          <div className="hidden gap-4 md:grid md:grid-cols-3">
-            {TASK_STATUSES.map((status) => {
-              const group = groups.get(status) ?? [];
-              return (
-                <section key={status} className="flex flex-col">
-                  <div className="mb-2 flex items-center justify-between px-1">
-                    <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      {status}
-                    </h2>
-                    <span className="flex h-5 items-center rounded-full border border-border bg-surface px-2 font-mono text-2xs font-semibold tabular-nums text-foreground/80">
-                      {group.length}
-                    </span>
-                  </div>
-                  <motion.div
-                    variants={listVariants}
-                    initial="hidden"
-                    animate="visible"
-                    className="space-y-2.5"
-                  >
-                    {group.map((task) => (
-                      <motion.div
-                        key={task.id}
-                        variants={itemVariants}
-                        className="rounded-card glass-tile glass-tile-hover p-3.5"
-                      >
-                        <TaskCardBody task={task} linked={linkLabel(task)} onEdit={() => setSheet({ open: true, editing: task.id, preset: task.status })} />
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                          {TASK_STATUSES.filter((s) => s !== status).map((s) => (
-                            <motion.button
-                              key={s}
-                              whileTap={{ scale: 0.97 }}
-                              type="button"
-                              onClick={() => moveTask(task, s)}
-                              className="glass-btn-base glass-btn-outline rounded-full px-2.5 py-0.5 text-2xs font-medium text-muted-foreground hover:text-foreground"
-                            >
-                              → {s}
-                            </motion.button>
-                          ))}
-                        </div>
-                      </motion.div>
-                    ))}
-                    {group.length === 0 && (
-                      <div className="rounded-card glass-section border-dashed px-3 py-8 text-center text-xs text-muted-foreground">
-                        Nothing here
-                      </div>
-                    )}
-                  </motion.div>
-                </section>
-              );
-            })}
-          </div>
-
-          {/* Mobile: collapsible accordions per status */}
-          <div className="space-y-3 md:hidden">
-            {TASK_STATUSES.map((status) => {
-              const group = groups.get(status) ?? [];
-              const isOpen = openSection === status;
-              return (
-                <section key={status} className="rounded-card glass-section overflow-hidden">
-                  <button
-                    type="button"
-                    className="flex min-h-11 w-full items-center justify-between px-4 py-3"
-                    onClick={() => {
-                      haptics.selection();
-                      setOpenSection(isOpen ? null : status);
-                    }}
-                  >
-                    <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-                      {status}
+          {!isMobile ? (
+            /* Desktop: Kanban columns */
+            <div className="hidden gap-4 md:grid md:grid-cols-3">
+              {TASK_STATUSES.map((status) => {
+                const group = groups.get(status) ?? [];
+                return (
+                  <section key={status} className="flex flex-col">
+                    <div className="mb-2 flex items-center justify-between px-1">
+                      <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        {status}
+                      </h2>
                       <span className="flex h-5 items-center rounded-full border border-border bg-surface px-2 font-mono text-2xs font-semibold tabular-nums text-foreground/80">
                         {group.length}
                       </span>
-                    </span>
-                    <ChevronDown
-                      className={cn(
-                        "h-4 w-4 text-muted-foreground transition-transform",
-                        isOpen && "rotate-180"
-                      )}
-                    />
-                  </button>
-                  <AnimatePresence>
-                    {isOpen && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="space-y-2.5 border-t border-border p-3">
-                          {group.map((task) => (
-                            <div key={task.id} className="rounded-field glass-tile p-3">
-                              <TaskCardBody
-                                task={task}
-                                linked={linkLabel(task)}
-                                onEdit={() => setSheet({ open: true, editing: task.id, preset: task.status })}
-                              />
-                              <div className="mt-3 flex flex-wrap gap-1.5">
-                                {TASK_STATUSES.filter((s) => s !== status).map((s) => (
-                                  <motion.button
-                                    key={s}
-                                    whileTap={{ scale: 0.97 }}
-                                    type="button"
-                                    onClick={() => moveTask(task, s)}
-                                  className="glass-btn-base glass-btn-outline min-h-11 h-auto rounded-full px-3 text-2xs font-medium text-muted-foreground"
-                                  >
-                                    → {s}
-                                  </motion.button>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                          {group.length === 0 && (
-                            <p className="px-1 py-2 text-center text-xs text-muted-foreground">
-                              Nothing here
-                            </p>
-                          )}
+                    </div>
+                    <motion.div
+                      variants={listVariants}
+                      initial={reduceMotion ? false : "hidden"}
+                      animate="visible"
+                      className="space-y-2.5"
+                    >
+                      {group.map((task, index) => (
+                        <motion.div
+                          key={task.id}
+                          variants={itemVariants}
+                          animate={reduceMotion ? blurIn.animate : undefined}
+                          transition={reduceMotion ? { duration: 0 } : undefined}
+                          custom={index}
+                          layout={reduceMotion ? false : "position"}
+                          layoutDependency={groups}
+                          className="rounded-card glass-tile glass-tile-hover p-3.5"
+                        >
+                          <TaskCardBody task={task} linked={linkLabel(task)} onEdit={() => setSheet({ open: true, editing: task.id, preset: task.status })} />
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            {TASK_STATUSES.filter((s) => s !== status).map((s) => (
+                              <motion.button
+                                key={s}
+                                whileTap={{ scale: 0.97 }}
+                                type="button"
+                                onClick={() => moveTask(task, s)}
+                                className="glass-btn-base glass-btn-outline rounded-full px-2.5 py-0.5 text-2xs font-medium text-muted-foreground hover:text-foreground"
+                              >
+                                → {s}
+                              </motion.button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      ))}
+                      {group.length === 0 && (
+                        <div className="rounded-card glass-section border-dashed px-3 py-8 text-center text-xs text-muted-foreground">
+                          Nothing here
                         </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </section>
-              );
-            })}
-          </div>
+                      )}
+                    </motion.div>
+                  </section>
+                );
+              })}
+            </div>
+          ) : (
+            /* Mobile: collapsible accordions per status */
+            <div className="space-y-3 md:hidden">
+              {TASK_STATUSES.map((status, statusIndex) => {
+                const group = groups.get(status) ?? [];
+                const isOpen = openSection === status;
+                const panelId = `${accordionId}-${statusIndex}`;
+                return (
+                  <motion.section key={status} layout={reduceMotion ? false : "position"} layoutDependency={openSection} className="rounded-card glass-section overflow-hidden">
+                    <button
+                      type="button"
+                      aria-expanded={isOpen}
+                      aria-controls={panelId}
+                      className="flex min-h-11 w-full items-center justify-between px-4 py-3"
+                      onClick={() => {
+                        haptics.selection();
+                        setOpenSection(isOpen ? null : status);
+                      }}
+                    >
+                      <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+                        {status}
+                        <span className="flex h-5 items-center rounded-full border border-border bg-surface px-2 font-mono text-2xs font-semibold tabular-nums text-foreground/80">
+                          {group.length}
+                        </span>
+                      </span>
+                      <ChevronDown
+                        className={cn(
+                          "h-4 w-4 text-muted-foreground transition-transform",
+                          isOpen && "rotate-180"
+                        )}
+                      />
+                    </button>
+                    <div id={panelId} aria-hidden={!isOpen} inert={!isOpen}>
+                      <AnimatePresence initial={false}>
+                        {isOpen && (
+                          <motion.div
+                            key={panelId}
+                            initial={reduceMotion ? false : { opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={reduceMotion ? { duration: 0 } : blurInTransition}
+                            className="overflow-hidden"
+                          >
+                            <motion.div
+                              variants={listVariants}
+                              initial={reduceMotion ? false : "hidden"}
+                              animate="visible"
+                              className="space-y-2.5 border-t border-border p-3"
+                            >
+                              {group.map((task, index) => (
+                                <motion.div
+                                  key={task.id}
+                                  variants={itemVariants}
+                                  animate={reduceMotion ? blurIn.animate : undefined}
+                                  transition={reduceMotion ? { duration: 0 } : undefined}
+                                  custom={index}
+                                  layout={reduceMotion ? false : "position"}
+                                  layoutDependency={groups}
+                                  className="rounded-field glass-tile p-3"
+                                >
+                                  <TaskCardBody
+                                    task={task}
+                                    linked={linkLabel(task)}
+                                    onEdit={() => setSheet({ open: true, editing: task.id, preset: task.status })}
+                                  />
+                                  <div className="mt-3 flex flex-wrap gap-1.5">
+                                    {TASK_STATUSES.filter((s) => s !== status).map((s) => (
+                                      <motion.button
+                                        key={s}
+                                        whileTap={{ scale: 0.97 }}
+                                        type="button"
+                                        onClick={() => moveTask(task, s)}
+                                        className="glass-btn-base glass-btn-outline min-h-11 h-auto rounded-full px-3 text-2xs font-medium text-muted-foreground"
+                                      >
+                                        → {s}
+                                      </motion.button>
+                                    ))}
+                                  </div>
+                                </motion.div>
+                              ))}
+                              {group.length === 0 && (
+                                <p className="px-1 py-2 text-center text-xs text-muted-foreground">
+                                  Nothing here
+                                </p>
+                              )}
+                            </motion.div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </motion.section>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
 
@@ -319,6 +349,7 @@ export function TasksView({
         onClose={closeSheet}
         title={sheet.editing ? "Edit task" : "Add task"}
       >
+        {/* FormSheet gates mounting and retains the form throughout its exit. */}
         <TaskForm
           item={editing ?? (sheet.open ? ({ status: sheet.preset } as Task) : null)}
           onClose={closeSheet}

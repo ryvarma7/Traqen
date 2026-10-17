@@ -1,11 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Check, ChevronDown } from "lucide-react";
+import { useMotionPreferences } from "@/components/shared/motion-provider";
 import { TrackTaskRow } from "@/components/tracks/track-task-row";
 import { formatShortDate } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
+import { blurIn, blurInTransition } from "@/lib/motion";
 import type { PhaseProgress } from "@/lib/track-plan";
 import type { TrackItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -68,31 +70,37 @@ export function PhaseAccordion({
   busyIds: Set<string>;
   onItemToggle: (item: TrackItem) => void;
 }) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useMotionPreferences();
+  const accordionId = React.useId();
 
   return (
     <div className="space-y-1.5">
       {progress.map((p) => {
         const open = openId === p.phase.id;
         const complete = p.state === "done";
+        const headerId = `${accordionId}-${p.phase.id}-header`;
+        const panelId = `${accordionId}-${p.phase.id}-panel`;
 
         return (
-          <div
+          <motion.div
             key={p.phase.id}
+            layout={reduceMotion ? false : "position"}
+            transition={reduceMotion ? { duration: 0 } : blurInTransition}
             className={cn(
-              // No overflow-hidden here: the expanding panel clips itself, so
-              // the header's focus ring is never cut off by the tile.
+              // Keep the header's focus ring outside the tile's content box.
               "rounded-field glass-tile transition-colors",
               open && "border-white/25"
             )}
           >
             <button
               type="button"
+              id={headerId}
               onClick={() => {
                 haptics.selection();
                 onSelect(p.phase.id);
               }}
               aria-expanded={open}
+              aria-controls={panelId}
               className="focus-ring flex w-full items-center gap-2.5 px-3 py-2.5 text-left"
             >
               <PhaseDot state={p.state} />
@@ -116,52 +124,51 @@ export function PhaseAccordion({
                 <DateRange range={p.range} />
                 <ChevronDown
                   className={cn(
-                    "h-4 w-4 text-muted-foreground transition-transform",
+                    "h-4 w-4 text-muted-foreground transition-transform motion-reduce:transition-none",
                     open && "rotate-180"
                   )}
                 />
               </span>
             </button>
 
-            <AnimatePresence initial={false}>
-              {open && (
-                <motion.div
-                  initial={reduceMotion ? false : { height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={reduceMotion ? { height: 0, opacity: 0 } : { height: 0, opacity: 0 }}
-                  transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                  className="overflow-hidden"
-                >
-                  <div className="space-y-2 px-3 pb-3">
-                    {p.phase.description && (
-                      <p className="pb-0.5 text-sm leading-relaxed text-muted-foreground">
-                        {p.phase.description}
-                      </p>
-                    )}
-                    {p.items.length === 0 ? (
-                      <p className="py-2 text-sm text-muted-foreground">
-                        No steps in this phase.
-                      </p>
-                    ) : (
-                      p.items.map((item) => (
-                        <TrackTaskRow
-                          key={item.id}
-                          item={item}
-                          busy={busyIds.has(item.id)}
-                          onToggle={onItemToggle}
-                        />
-                      ))
-                    )}
-                    {complete && (
-                      <p className="text-xs font-medium text-muted-foreground">
-                        Phase complete.
-                      </p>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+            {open && (
+              <motion.div
+                id={panelId}
+                role="region"
+                aria-labelledby={headerId}
+                initial={reduceMotion ? false : blurIn.initial}
+                animate={blurIn.animate}
+                transition={reduceMotion ? { duration: 0 } : blurInTransition}
+              >
+                <div className="space-y-2 px-3 pb-3">
+                  {p.phase.description && (
+                    <p className="pb-0.5 text-sm leading-relaxed text-muted-foreground">
+                      {p.phase.description}
+                    </p>
+                  )}
+                  {p.items.length === 0 ? (
+                    <p className="py-2 text-sm text-muted-foreground">
+                      No steps in this phase.
+                    </p>
+                  ) : (
+                    p.items.map((item) => (
+                      <TrackTaskRow
+                        key={item.id}
+                        item={item}
+                        busy={busyIds.has(item.id)}
+                        onToggle={onItemToggle}
+                      />
+                    ))
+                  )}
+                  {complete && (
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Phase complete.
+                    </p>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </motion.div>
         );
       })}
     </div>
@@ -179,6 +186,8 @@ export function PhaseRail({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
+  const reduceMotion = useMotionPreferences();
+
   return (
     <nav
       aria-label="Track phases"
@@ -220,9 +229,9 @@ export function PhaseRail({
                     <span className="h-1 w-14 overflow-hidden rounded-full bg-white/10">
                       <motion.span
                         initial={false}
-                        animate={{ width: `${pct}%` }}
-                        transition={{ duration: 0.4, ease: "easeOut" }}
-                        className="block h-full rounded-full bg-white"
+                        animate={{ scaleX: pct / 100 }}
+                        transition={reduceMotion ? { duration: 0 } : { duration: 0.4, ease: "easeOut" }}
+                        className="block h-full w-full origin-left rounded-full bg-white"
                       />
                     </span>
                     <span className="font-mono text-2xs tabular-nums text-muted-foreground">

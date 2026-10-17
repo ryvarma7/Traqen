@@ -4,6 +4,7 @@ import { Raleway } from "next/font/google";
 import ServiceWorkerRegister from "@/components/service-worker";
 import { ProfileProvider } from "@/lib/profile-store";
 import { ProfileRenameModal } from "@/components/shell/profile-rename-modal";
+import { MotionProvider } from "@/components/shared/motion-provider";
 import "./globals.css";
 
 const raleway = Raleway({
@@ -56,16 +57,18 @@ export default function RootLayout({
          * profile + one modal open-state. ProfileRenameModal renders from that
          * store and is mounted once here.
          */}
-        <ProfileProvider>
-          {children}
-          <ProfileRenameModal />
-        </ProfileProvider>
-        <ServiceWorkerRegister />
-        <Toaster position="top-right" toastOptions={{
-          classNames: {
-            toast: "!rounded-field !border-border !bg-surface !text-foreground !text-sm !shadow-lift",
-          },
-        }} />
+        <MotionProvider>
+          <ProfileProvider>
+            {children}
+            <ProfileRenameModal />
+          </ProfileProvider>
+          <ServiceWorkerRegister />
+          <Toaster position="top-right" toastOptions={{
+            classNames: {
+              toast: "!rounded-field !border-border !bg-surface !text-foreground !text-sm !shadow-lift",
+            },
+          }} />
+        </MotionProvider>
       </body>
     </html>
   );

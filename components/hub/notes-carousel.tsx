@@ -10,6 +10,8 @@ import { SegmentedTabs } from "@/components/hub/segmented-tabs";
 import { relativeTime } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
 import { updateNotePrivacy } from "@/lib/notes-privacy";
+import { useMotionPreferences } from "@/components/shared/motion-provider";
+import { blurIn, listItemTransition } from "@/lib/motion";
 
 export type NotePreview = {
   id: string;
@@ -34,6 +36,7 @@ const PREVIEW_LINES = 3;
  * ranking feature and this pass is visual only.
  */
 export function NotesCarousel({ notes }: { notes: NotePreview[] }) {
+  const reducedMotion = useMotionPreferences();
   const [tab, setTab] = React.useState<"recent" | "pinned">("recent");
   /** Optimistic overrides, mirroring the notes page: the card flips instantly
    *  and rolls back if the write fails. */
@@ -115,9 +118,9 @@ export function NotesCarousel({ notes }: { notes: NotePreview[] }) {
           {visible.map((note, i) => (
             <motion.div
               key={note.id}
-              initial={{ opacity: 0, filter: "blur(8px)", scale: 0.98 }}
-              animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
-              transition={{ duration: 0.25, delay: Math.min(i, 6) * 0.04, ease: "easeOut" }}
+              initial={reducedMotion ? false : blurIn.initial}
+              animate={blurIn.animate}
+              transition={reducedMotion ? { duration: 0 } : listItemTransition(i)}
               className="w-60 shrink-0 sm:w-64"
             >
               <Link
