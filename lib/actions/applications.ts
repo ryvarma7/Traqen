@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { safeActionError } from "@/lib/action-errors";
 import { HACKATHON_STATUSES, JOB_STATUSES, PRIORITIES } from "@/lib/types";
 
 type ActionResult = { error?: string };
@@ -99,7 +100,7 @@ export async function saveJobApplication(
     ? await supabase.from("job_applications").update(payload).eq("id", id).eq("user_id", user.id)
     : await supabase.from("job_applications").insert({ ...payload, user_id: user.id });
 
-  if (error) return { error: error.message };
+  if (error) return { error: safeActionError(error, "Unable to save this application.") };
   revalidatePath("/");
   revalidatePath("/applications");
   return {};
@@ -112,7 +113,7 @@ export async function deleteJobApplication(id: string): Promise<ActionResult> {
   if (!idSchema.safeParse(id).success) return { error: "Unable to delete this application." };
   const { error } = await supabase.from("job_applications").delete()
     .eq("id", id).eq("user_id", user.id);
-  if (error) return { error: error.message };
+  if (error) return { error: safeActionError(error, "Unable to delete this application.") };
   revalidatePath("/");
   revalidatePath("/applications");
   return {};
@@ -140,7 +141,7 @@ export async function saveHackathon(
     ? await supabase.from("hackathons").update(payload).eq("id", id).eq("user_id", user.id)
     : await supabase.from("hackathons").insert({ ...payload, user_id: user.id });
 
-  if (error) return { error: error.message };
+  if (error) return { error: safeActionError(error, "Unable to save this hackathon.") };
   revalidatePath("/");
   revalidatePath("/applications");
   return {};
@@ -153,7 +154,7 @@ export async function deleteHackathon(id: string): Promise<ActionResult> {
   if (!idSchema.safeParse(id).success) return { error: "Unable to delete this hackathon." };
   const { error } = await supabase.from("hackathons").delete()
     .eq("id", id).eq("user_id", user.id);
-  if (error) return { error: error.message };
+  if (error) return { error: safeActionError(error, "Unable to delete this hackathon.") };
   revalidatePath("/");
   revalidatePath("/applications");
   return {};
@@ -179,7 +180,7 @@ export async function saveJobApplicationNotes(
     .from("job_applications")
     .update({ notes: notes.trim() || null, updated_at: new Date().toISOString() })
     .eq("id", id).eq("user_id", user.id);
-  if (error) return { error: error.message };
+  if (error) return { error: safeActionError(error, "Unable to save these notes.") };
   revalidatePath("/");
   revalidatePath("/applications");
   return {};
@@ -203,7 +204,7 @@ export async function saveHackathonNotes(
     .from("hackathons")
     .update({ notes: notes.trim() || null, updated_at: new Date().toISOString() })
     .eq("id", id).eq("user_id", user.id);
-  if (error) return { error: error.message };
+  if (error) return { error: safeActionError(error, "Unable to save these notes.") };
   revalidatePath("/");
   revalidatePath("/applications");
   return {};
@@ -238,7 +239,9 @@ export async function addDropdownOption(
     value: trimmed,
   });
   // Duplicate (user_id, section, field_name, value) is fine — treat as success.
-  if (error && error.code !== "23505") return { error: error.message };
+  if (error && error.code !== "23505") {
+    return { error: safeActionError(error, "Unable to add that dropdown option.") };
+  }
   revalidatePath("/applications");
   return {};
 }

@@ -1,6 +1,6 @@
--- Traqen database schema
--- Safe to run on a new or existing Supabase project. Existing tables and
--- policies are preserved; missing columns/policies are added below.
+-- Traqen canonical database schema for a fresh Supabase project.
+-- Existing deployments must run supabase/schema-migrations.sql instead of
+-- guessing which historical schema-vN file applies.
 -- Related dashboard setting: Authentication → Providers → Email → turn OFF "Confirm email".
 
 create extension if not exists "uuid-ossp";
@@ -30,23 +30,22 @@ alter table public.profiles drop constraint if exists profiles_username_key;
 drop policy if exists "Users can view own profile" on public.profiles;
 create policy "Users can view own profile"
   on public.profiles for select
+  to authenticated
   using ((select auth.uid()) = id);
 
 drop policy if exists "Users can insert own profile" on public.profiles;
-create policy "Users can insert own profile"
-  on public.profiles for insert
-  with check ((select auth.uid()) = id);
 
 drop policy if exists "Users can update own profile" on public.profiles;
 create policy "Users can update own profile"
   on public.profiles for update
-  using ((select auth.uid()) = id);
+  to authenticated
+  using ((select auth.uid()) = id)
+  with check ((select auth.uid()) = id);
 
--- NOTE: the legacy username->email lookup (get_email_for_username) that used to
--- live here is deliberately NOT created any more. It resolved a username to a
--- real email address, which is exactly the enumeration risk Google-only auth
--- removes by having no password flow to support. schema-v2.sql drops it on
--- existing databases; a fresh install must never recreate it.
+-- NOTE: the legacy username->email lookup (get_email_for_username) is never
+-- created. It resolved a username to a real email address, which is exactly
+-- the enumeration risk Google-only auth removes by having no password flow.
+drop function if exists public.get_email_for_username(text);
 
 -- First Google sign-in: create the profiles row if it doesn't exist yet.
 -- Username is derived from the Google account's email local part. The real
@@ -165,6 +164,7 @@ alter table public.dropdown_options enable row level security;
 drop policy if exists "Users manage own dropdown options" on public.dropdown_options;
 create policy "Users manage own dropdown options"
   on public.dropdown_options for all
+  to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
@@ -197,6 +197,7 @@ alter table public.job_applications enable row level security;
 drop policy if exists "Users manage own job applications" on public.job_applications;
 create policy "Users manage own job applications"
   on public.job_applications for all
+  to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
@@ -236,6 +237,7 @@ alter table public.hackathons enable row level security;
 drop policy if exists "Users manage own hackathons" on public.hackathons;
 create policy "Users manage own hackathons"
   on public.hackathons for all
+  to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
@@ -260,6 +262,7 @@ alter table public.tasks enable row level security;
 drop policy if exists "Users manage own tasks" on public.tasks;
 create policy "Users manage own tasks"
   on public.tasks for all
+  to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
@@ -280,22 +283,9 @@ alter table public.notes enable row level security;
 drop policy if exists "Users manage own notes" on public.notes;
 create policy "Users manage own notes"
   on public.notes for all
+  to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
-
--- ---------------------------------------------------------------------------
--- Migration for existing databases: add notes to tasks.
--- If your tasks table already exists, run just this statement once in
--- Supabase → SQL Editor (the full create table above already includes it).
--- ---------------------------------------------------------------------------
-alter table public.tasks add column if not exists notes text;
-
--- ---------------------------------------------------------------------------
--- Migration for existing databases: add the privacy flag to notes.
--- If your notes table already exists, run just this statement once in
--- Supabase → SQL Editor (the full create table above already includes it).
--- ---------------------------------------------------------------------------
-alter table public.notes add column if not exists private boolean default false;
 
 -- ---------------------------------------------------------------------------
 -- Learning tracks (Course Tracker).
@@ -317,6 +307,7 @@ alter table public.learning_tracks enable row level security;
 drop policy if exists "Users manage own learning tracks" on public.learning_tracks;
 create policy "Users manage own learning tracks"
   on public.learning_tracks for all
+  to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
@@ -333,6 +324,7 @@ alter table public.track_phases enable row level security;
 drop policy if exists "Users manage own track phases" on public.track_phases;
 create policy "Users manage own track phases"
   on public.track_phases for all
+  to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
@@ -355,6 +347,7 @@ alter table public.track_items enable row level security;
 drop policy if exists "Users manage own track items" on public.track_items;
 create policy "Users manage own track items"
   on public.track_items for all
+  to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
@@ -369,6 +362,7 @@ create index if not exists idx_job_applications_user_id on public.job_applicatio
 create index if not exists idx_hackathons_user_id on public.hackathons(user_id);
 create index if not exists idx_tasks_user_id on public.tasks(user_id);
 create index if not exists idx_notes_user_id on public.notes(user_id);
+create index if not exists idx_notes_user_updated_at on public.notes(user_id, updated_at desc);
 create index if not exists idx_track_phases_user_id on public.track_phases(user_id);
 create index if not exists idx_track_items_user_id on public.track_items(user_id);
 create index if not exists idx_track_items_phase_id on public.track_items(phase_id);
@@ -376,12 +370,17 @@ create index if not exists idx_track_items_phase_id on public.track_items(phase_
 -- ---------------------------------------------------------------------------
 -- Table privileges. RLS decides WHICH rows are visible, but Postgres also
 -- requires table-level GRANTs — without them every query fails with 403
--- "permission denied" even when the policies pass, and the signup profile
--- insert fails so new users can never log in.
+-- "permission denied" even when the policies pass. Profile provisioning uses
+-- the authenticated SECURITY DEFINER function, not a client-side insert.
 -- Nothing is granted to anon. Google OAuth does not need an unauthenticated
 -- email lookup RPC.
 -- ---------------------------------------------------------------------------
-grant select, insert, update, delete on public.profiles to authenticated;
+revoke all on public.profiles from anon, authenticated;
+grant select (id, username, preferences) on public.profiles to authenticated;
+grant update (username, preferences) on public.profiles to authenticated;
+revoke all on public.dropdown_options, public.job_applications, public.hackathons,
+  public.tasks, public.notes, public.learning_tracks, public.track_phases,
+  public.track_items from anon;
 grant select, insert, update, delete on public.dropdown_options to authenticated;
 grant select, insert, update, delete on public.job_applications to authenticated;
 grant select, insert, update, delete on public.hackathons to authenticated;
@@ -390,15 +389,3 @@ grant select, insert, update, delete on public.notes to authenticated;
 grant select, insert, update, delete on public.learning_tracks to authenticated;
 grant select, insert, update, delete on public.track_phases to authenticated;
 grant select, insert, update, delete on public.track_items to authenticated;
-
--- ---------------------------------------------------------------------------
--- Migration for existing databases: schema v2 (Google OAuth era).
--- Run each statement once in Supabase → SQL Editor. Fresh installs already
--- have all of these from the create table statements above.
--- ---------------------------------------------------------------------------
-alter table public.profiles add column if not exists auth_provider text not null default 'google';
-alter table public.profiles add column if not exists preferences jsonb not null default '{}'::jsonb;
-alter table public.job_applications add column if not exists salary_range text;
-alter table public.job_applications add column if not exists next_action text;
-alter table public.hackathons add column if not exists team_status text;
-alter table public.hackathons add column if not exists submission_link text;

@@ -12,8 +12,5 @@
   "aliases": {
     "components": "@/components",
     "utils": "@/lib/utils"
-  },
-  "registries": {
-    "@loading-ui": "https://loading-ui.com/r/{name}.json"
   }
 }

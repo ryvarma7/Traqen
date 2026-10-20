@@ -106,14 +106,31 @@ const itemSchema = z.object({
 const phaseSchema = z.object({
   title: z.string().trim().min(1).max(500),
   description: z.string().max(5000).optional().nullable(),
-  items: z.array(itemSchema).min(1),
+  items: z.array(itemSchema).min(1).max(50),
 });
 
-export const trackSchema = z.object({
-  track_title: z.string().trim().min(1).max(500),
-  description: z.string().max(5000).optional().nullable(),
-  phases: z.array(phaseSchema).min(1).max(24),
-});
+const MAX_TOTAL_ITEMS = 240;
+const MAX_INPUT_LENGTH = 250_000;
+
+export const trackSchema = z
+  .object({
+    track_title: z.string().trim().min(1).max(500),
+    description: z.string().max(5000).optional().nullable(),
+    phases: z.array(phaseSchema).min(1).max(24),
+  })
+  .superRefine((track, ctx) => {
+    const itemCount = track.phases.reduce((count, phase) => count + phase.items.length, 0);
+    if (itemCount > MAX_TOTAL_ITEMS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.too_big,
+        maximum: MAX_TOTAL_ITEMS,
+        type: "array",
+        inclusive: true,
+        path: ["phases"],
+        message: `A track can contain at most ${MAX_TOTAL_ITEMS} steps`,
+      });
+    }
+  });
 
 export type ParsedTrack = z.infer<typeof trackSchema>;
 export type ParsedItem = z.infer<typeof itemSchema>;
@@ -128,6 +145,9 @@ export type ParseResult =
 export function parseTrackInput(raw: string): ParseResult {
   const text = raw.trim();
   if (!text) return { ok: false, error: "Paste the plan your AI gave you first." };
+  if (text.length > MAX_INPUT_LENGTH) {
+    return { ok: false, error: "That plan is too large. Ask your AI for a shorter plan." };
+  }
 
   // Strip code fences if present.
   const fenced = text.match(/```[\w]*\s*\n?([\s\S]*?)```/i);

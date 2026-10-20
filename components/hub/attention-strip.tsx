@@ -10,6 +10,8 @@ import {
   Briefcase,
   CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   CircleDot,
   ListChecks,
   Trophy,
@@ -92,12 +94,6 @@ const ROLE_LABEL: Record<AttentionDateRole, string> = {
   due: "Due",
 };
 
-const INITIAL_VISIBLE_BY_GROUP: Record<AttentionGroup, number> = {
-  now: 4,
-  coming_up: 3,
-  needs_next_step: 3,
-};
-
 const INITIAL_MOBILE_VISIBLE = 3;
 
 function temporalLabel(item: AttentionItem) {
@@ -119,7 +115,6 @@ export function AttentionStrip({
 }: {
   items: AttentionItem[];
 }) {
-  const [expanded, setExpanded] = React.useState(false);
   const [mobileGroup, setMobileGroup] = React.useState<AttentionGroup | null>(null);
   const [mobileExpanded, setMobileExpanded] = React.useState<Partial<Record<AttentionGroup, boolean>>>({});
   const queueId = React.useId();
@@ -130,11 +125,7 @@ export function AttentionStrip({
     },
     { now: [], coming_up: [], needs_next_step: [] }
   );
-  const hidden = GROUP_ORDER.reduce(
-    (count, group) =>
-      count + Math.max(0, grouped[group].length - INITIAL_VISIBLE_BY_GROUP[group]),
-    0
-  );
+  const emptyGroups = GROUP_ORDER.filter((group) => grouped[group].length === 0);
   const urgent = grouped.now.length;
   const selectedGroup = mobileGroup ?? GROUP_ORDER.find((group) => grouped[group].length > 0) ?? "now";
 
@@ -171,16 +162,6 @@ export function AttentionStrip({
             {grouped.coming_up.length} coming up · {grouped.needs_next_step.length} need a next step
           </p>
         </div>
-        {hidden > 0 && (
-          <button
-            type="button"
-            aria-expanded={expanded}
-            onClick={() => setExpanded((value) => !value)}
-            className="focus-ring ml-auto hidden min-h-11 shrink-0 rounded-field px-2 text-2xs font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground md:block"
-          >
-            {expanded ? "Show less" : `Show ${hidden} more`}
-          </button>
-        )}
       </header>
 
       <div role="group" aria-label="Attention groups" className="mb-3 grid grid-cols-3 gap-2 md:hidden">
@@ -204,93 +185,170 @@ export function AttentionStrip({
         ))}
       </div>
 
-      <div className="min-w-0 md:grid md:grid-cols-3 md:gap-3">
-        {GROUP_ORDER.map((group, groupIndex) => {
-          const meta = GROUP_META[group];
-          const Icon = meta.icon;
-          const groupItems = grouped[group];
-          const desktopLimit = expanded ? groupItems.length : INITIAL_VISIBLE_BY_GROUP[group];
-          const mobileLimit = mobileExpanded[group] ? groupItems.length : INITIAL_MOBILE_VISIBLE;
-          // Share the card markup; each viewport controls its own visible slice.
-          const visibleItems = groupItems.slice(0, Math.max(desktopLimit, mobileLimit));
-          const groupHidden = Math.max(0, groupItems.length - desktopLimit);
-
-          return (
-            <section
-              key={group}
-              id={`${queueId}-${group}`}
-              aria-labelledby={`${queueId}-${group}-heading`}
-              className={cn(
-                "min-w-0 md:block md:rounded-field md:bg-card-hover/55 md:p-3",
-                selectedGroup !== group && "hidden"
-              )}
-            >
-              <header className="mb-2.5 flex items-start gap-2">
-                <Icon className={cn("mt-0.5 hidden h-3.5 w-3.5 shrink-0 md:block", meta.tone)} strokeWidth={1.9} aria-hidden />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <h3
-                      id={`${queueId}-${group}-heading`}
-                      className="sr-only text-xs font-semibold text-foreground md:not-sr-only"
-                    >
-                      {meta.label}
-                    </h3>
-                    <span className="hidden font-mono text-2xs tabular-nums text-muted-foreground/60 md:inline">
-                      {groupItems.length}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 text-2xs text-muted-foreground md:text-muted-foreground/65">{meta.description}</p>
-                </div>
-              </header>
-
-              {groupItems.length === 0 ? (
-                <p className="rounded-field bg-surface px-3 py-4 text-xs text-muted-foreground md:border md:border-dashed md:border-white/10 md:bg-transparent md:px-2.5 md:py-3 md:text-2xs md:text-muted-foreground/55">
-                  <span className="md:hidden">{meta.emptyMessage}</span>
-                  <span className="hidden md:inline">Nothing here.</span>
-                </p>
-              ) : (
-                <ul id={`${queueId}-${group}-list`} className="min-w-0 space-y-2">
-                  {visibleItems.map((item, itemIndex) => (
-                    <AttentionCard
-                      key={item.id}
-                      item={item}
-                      index={groupIndex * 3 + itemIndex}
-                      className={cn(
-                        itemIndex >= mobileLimit && "hidden",
-                        itemIndex >= desktopLimit ? "md:hidden" : "md:list-item"
-                      )}
-                    />
-                  ))}
-                </ul>
-              )}
-
-              {groupItems.length > INITIAL_MOBILE_VISIBLE && (
-                <button
-                  type="button"
-                  aria-expanded={!!mobileExpanded[group]}
-                  aria-controls={`${queueId}-${group}-list`}
-                  aria-label={`${mobileExpanded[group] ? "Show fewer" : "Show more"} ${meta.mobileLabel} items`}
-                  onClick={() => setMobileExpanded((value) => ({ ...value, [group]: !value[group] }))}
-                  className="focus-ring mt-2 min-h-11 w-full rounded-field bg-surface px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent-subtle hover:text-foreground md:hidden"
-                >
-                  {mobileExpanded[group] ? "Show less" : `Show ${groupItems.length - INITIAL_MOBILE_VISIBLE} more`}
-                </button>
-              )}
-
-              {groupHidden > 0 && (
-                <button
-                  type="button"
-                  aria-expanded={expanded}
-                  onClick={() => setExpanded(true)}
-                  className="focus-ring mt-2 hidden min-h-11 rounded-field px-1 text-2xs font-medium text-muted-foreground transition-colors hover:text-foreground md:block"
-                >
-                  Show {groupHidden} more
-                </button>
-              )}
-            </section>
-          );
-        })}
+      <div className="min-w-0 md:flex md:flex-col md:gap-5">
+        {GROUP_ORDER.map((group, groupIndex) => (
+          <AttentionLane
+            key={group}
+            group={group}
+            groupIndex={groupIndex}
+            items={grouped[group]}
+            id={`${queueId}-${group}`}
+            selected={selectedGroup === group}
+            mobileExpanded={!!mobileExpanded[group]}
+            onMobileToggle={() => setMobileExpanded((value) => ({ ...value, [group]: !value[group] }))}
+          />
+        ))}
       </div>
+
+      {emptyGroups.length > 0 && (
+        <div aria-label="Clear attention groups" className="mt-3 hidden flex-wrap items-center gap-x-4 gap-y-2 md:flex">
+          {emptyGroups.map((group) => (
+            <span key={group} title={GROUP_META[group].emptyMessage} className="inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
+              <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+              {GROUP_META[group].label} · All clear
+            </span>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** One shared group: the existing mobile stack becomes a horizontal lane on desktop. */
+function AttentionLane({
+  group, groupIndex, items, id, selected, mobileExpanded, onMobileToggle,
+}: {
+  group: AttentionGroup;
+  groupIndex: number;
+  items: AttentionItem[];
+  id: string;
+  selected: boolean;
+  mobileExpanded: boolean;
+  onMobileToggle: () => void;
+}) {
+  const meta = GROUP_META[group];
+  const Icon = meta.icon;
+  const listRef = React.useRef<HTMLUListElement>(null);
+  const reduceMotion = useReducedMotion();
+  const [edges, setEdges] = React.useState({ previous: false, next: false });
+  const mobileLimit = mobileExpanded ? items.length : INITIAL_MOBILE_VISIBLE;
+
+  React.useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+
+    const updateEdges = () => {
+      const previous = list.scrollLeft > 1;
+      const next = list.scrollLeft + list.clientWidth < list.scrollWidth - 1;
+      setEdges((value) => value.previous === previous && value.next === next ? value : { previous, next });
+    };
+
+    updateEdges();
+    const observer = new ResizeObserver(updateEdges);
+    observer.observe(list);
+    list.addEventListener("scroll", updateEdges, { passive: true });
+    return () => {
+      observer.disconnect();
+      list.removeEventListener("scroll", updateEdges);
+    };
+  }, [items.length]);
+
+  const move = (direction: -1 | 1) => {
+    const list = listRef.current;
+    const firstCard = list?.firstElementChild;
+    if (!list || !firstCard) return;
+    const gap = parseFloat(getComputedStyle(list).columnGap) || 0;
+    const step = firstCard.getBoundingClientRect().width + gap;
+    const pageSize = Math.max(1, Math.floor((list.clientWidth + gap) / step));
+    list.scrollBy({ left: direction * step * pageSize, behavior: reduceMotion ? "auto" : "smooth" });
+  };
+
+  return (
+    <section
+      id={id}
+      aria-labelledby={`${id}-heading`}
+      className={cn(
+        "min-w-0",
+        !selected && "hidden",
+        items.length > 0 ? "md:block" : "md:hidden"
+      )}
+    >
+      <header className="mb-2.5 flex items-start gap-2 md:mb-2 md:items-center">
+        <Icon className={cn("mt-0.5 hidden h-3.5 w-3.5 shrink-0 md:block", meta.tone)} strokeWidth={1.9} aria-hidden />
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <h3 id={`${id}-heading`} className="sr-only text-xs font-semibold text-foreground md:not-sr-only">
+              {meta.label}
+            </h3>
+            <span className="hidden font-mono text-2xs tabular-nums text-muted-foreground md:inline">
+              {items.length}
+            </span>
+          </div>
+          <p className="mt-0.5 text-2xs text-muted-foreground">{meta.description}</p>
+        </div>
+        {items.length > 0 && (
+          <div className="ml-auto hidden shrink-0 items-center gap-2 md:flex">
+            <button
+              type="button"
+              aria-label={`Previous ${meta.label} items`}
+              aria-controls={`${id}-list`}
+              disabled={!edges.previous}
+              onClick={() => move(-1)}
+              className="focus-ring flex h-11 w-11 items-center justify-center rounded-field bg-surface text-muted-foreground transition-colors hover:bg-accent-subtle hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-surface disabled:hover:text-muted-foreground"
+            >
+              <ChevronLeft className="h-4 w-4" strokeWidth={1.8} aria-hidden />
+            </button>
+            <button
+              type="button"
+              aria-label={`Next ${meta.label} items`}
+              aria-controls={`${id}-list`}
+              disabled={!edges.next}
+              onClick={() => move(1)}
+              className="focus-ring flex h-11 w-11 items-center justify-center rounded-field bg-surface text-muted-foreground transition-colors hover:bg-accent-subtle hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-surface disabled:hover:text-muted-foreground"
+            >
+              <ChevronRight className="h-4 w-4" strokeWidth={1.8} aria-hidden />
+            </button>
+          </div>
+        )}
+      </header>
+
+      {items.length === 0 ? (
+        <p className="rounded-field bg-surface px-3 py-4 text-xs text-muted-foreground">
+          {meta.emptyMessage}
+        </p>
+      ) : (
+        <ul
+          ref={listRef}
+          id={`${id}-list`}
+          aria-label={`${meta.label} items`}
+          className="no-scrollbar min-w-0 space-y-2 md:-m-1 md:flex md:snap-x md:snap-mandatory md:scroll-px-1 md:gap-3 md:space-y-0 md:overflow-x-auto md:overscroll-x-contain md:p-1"
+        >
+          {items.map((item, itemIndex) => (
+            <AttentionCard
+              key={item.id}
+              item={item}
+              index={groupIndex * 3 + itemIndex}
+              className={cn(
+                itemIndex >= mobileLimit && "hidden",
+                "md:list-item md:w-72 md:max-w-full md:shrink-0 md:snap-start xl:w-[calc((100%-1.5rem)/3)] xl:min-w-72"
+              )}
+            />
+          ))}
+        </ul>
+      )}
+
+      {items.length > INITIAL_MOBILE_VISIBLE && (
+        <button
+          type="button"
+          aria-expanded={mobileExpanded}
+          aria-controls={`${id}-list`}
+          aria-label={`${mobileExpanded ? "Show fewer" : "Show more"} ${meta.mobileLabel} items`}
+          onClick={onMobileToggle}
+          className="focus-ring mt-2 min-h-11 w-full rounded-field bg-surface px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent-subtle hover:text-foreground md:hidden"
+        >
+          {mobileExpanded ? "Show less" : `Show ${items.length - INITIAL_MOBILE_VISIBLE} more`}
+        </button>
+      )}
     </section>
   );
 }

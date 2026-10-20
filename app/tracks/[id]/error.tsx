@@ -17,7 +17,9 @@ export default function TrackDetailError({
 }) {
   React.useEffect(() => {
     haptics.error();
-    console.error("Track detail failed to load:", error);
+    // Keep database/provider details out of the browser console. Next exposes
+    // the digest as the safe correlation value in production.
+    console.error("Track detail failed to load", error.digest ?? "unknown");
   }, [error]);
 
   return (

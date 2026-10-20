@@ -32,7 +32,7 @@ import { haptics } from "@/lib/haptics";
 import { useIsMobile } from "@/lib/hooks";
 import { blurIn, blurInTransition, itemVariants, listVariants } from "@/lib/motion";
 import { priorityRank } from "@/lib/priority";
-import { cn } from "@/lib/utils";
+import { cn, safeHttpUrl } from "@/lib/utils";
 import type { DropdownOption, Hackathon, JobApplication } from "@/lib/types";
 
 type Tab = "jobs" | "hackathons";
@@ -572,8 +572,10 @@ function DetailGrid({ row }: { row: JobApplication | Hackathon }) {
     push("End",          row.end_date);
   }
 
-  const link = row.application_link;
-  const projectLink = !("company" in row) ? row.project_link : null;
+  // Re-validate values at the render boundary as defense in depth for legacy
+  // rows or writes made outside the form/server action.
+  const link = safeHttpUrl(row.application_link);
+  const projectLink = !("company" in row) ? safeHttpUrl(row.project_link) : null;
 
   if (entries.length === 0 && !link && !projectLink)
     return <p className="text-xs text-muted-foreground">No extra details.</p>;

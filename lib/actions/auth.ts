@@ -13,7 +13,12 @@ type AuthResult = { error?: string } | undefined;
  *  screen and never sees a password. */
 export async function logInWithGoogle(): Promise<AuthResult> {
   const supabase = await createClient();
-  const authBaseUrl = getSiteUrl();
+  let authBaseUrl: string;
+  try {
+    authBaseUrl = getSiteUrl();
+  } catch {
+    return { error: "Google sign-in is not configured. Please contact the administrator." };
+  }
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
@@ -21,7 +26,7 @@ export async function logInWithGoogle(): Promise<AuthResult> {
       redirectTo: `${authBaseUrl}/auth/callback`,
     },
   });
-  if (error) return { error: error.message };
+  if (error) return { error: "Google sign-in could not be started. Please try again." };
 
   redirect(data.url);
 }
@@ -31,7 +36,7 @@ export async function logOut(): Promise<AuthResult> {
   // Local scope clears this browser's session without waiting for a global
   // token-revocation request. The cookie is the session boundary for this app.
   const { error } = await supabase.auth.signOut({ scope: "local" });
-  if (error) return { error: error.message };
+  if (error) return { error: "Could not sign out. Please try again." };
 
   revalidatePath("/", "layout");
   // The caller performs the final navigation after the action response applies

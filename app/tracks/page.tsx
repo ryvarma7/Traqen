@@ -11,7 +11,10 @@ export default async function TracksPage() {
   // Auth check in parallel with the reads; RLS scopes rows to auth.uid().
   const [userRes, tracksRes, itemsRes] = await Promise.all([
     supabase.auth.getUser(),
-    supabase.from("learning_tracks").select("*").order("created_at", { ascending: false }),
+    supabase
+      .from("learning_tracks")
+      .select("id, title, description, start_date, status, created_at")
+      .order("created_at", { ascending: false }),
     supabase.from("track_items").select("track_id, status"),
   ]);
 

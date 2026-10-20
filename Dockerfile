@@ -12,7 +12,7 @@ ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY \
     NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
     NEXT_TELEMETRY_DISABLED=1
-RUN node --test tests/performance.test.cjs && npm run build && npm prune --omit=dev
+RUN npm test && npm run build && npm prune --omit=dev
 
 FROM node:26.2.0-bookworm-slim AS runtime
 WORKDIR /app

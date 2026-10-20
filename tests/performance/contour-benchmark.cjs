@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
 const { performance } = require("node:perf_hooks");
 const loadTs = require("./load-ts.cjs");
 const { originalPaint } = require("./original-contours.cjs");

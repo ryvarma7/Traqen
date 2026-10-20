@@ -77,6 +77,9 @@ const nextConfig = {
     // Cache Router data payloads so repeat/back-forward navigation is instant.
     // Server actions call revalidatePath, which busts this cache on writes.
     staleTimes: { dynamic: 30, static: 180 },
+    // Track imports are text-only and do not need the framework default of 1 MB.
+    // Keep the action boundary small even before the Zod item limits run.
+    serverActions: { bodySizeLimit: "256kb" },
   },
 };
 

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { addDaysISO, diffDaysISO, isValidDateOnly } from "@/lib/dates";
+import { safeActionError } from "@/lib/action-errors";
 import { createClient } from "@/lib/supabase/server";
 import { resolveOffset, trackSchema, type ParsedTrack } from "@/lib/tracks/contract";
 
@@ -46,7 +47,7 @@ export async function importTrack(
     .select("id")
     .single();
   if (trackError || !inserted) {
-    return { error: trackError?.message ?? "Could not create the track." };
+    return { error: safeActionError(trackError, "Could not create the track.") };
   }
 
   const trackId = inserted.id;
@@ -66,7 +67,7 @@ export async function importTrack(
       .single();
     if (phaseError || !phaseRow) {
       await supabase.from("learning_tracks").delete().eq("id", trackId);
-      return { error: phaseError?.message ?? "Could not create a phase." };
+      return { error: safeActionError(phaseError, "Could not create a phase.") };
     }
 
     const rows = phase.items.map((item, i) => ({
@@ -89,7 +90,7 @@ export async function importTrack(
     const { error: itemsError } = await supabase.from("track_items").insert(rows);
     if (itemsError) {
       await supabase.from("learning_tracks").delete().eq("id", trackId);
-      return { error: itemsError.message };
+      return { error: safeActionError(itemsError, "Could not create the track steps.") };
     }
   }
 
@@ -119,7 +120,7 @@ export async function setTrackItemStatus(
     .eq("user_id", user.id)
     .select("id, track_id")
     .maybeSingle();
-  if (error) return { error: error.message };
+  if (error) return { error: safeActionError(error, "Unable to update this track step.") };
   if (!item) return { error: "That track step doesn't exist." };
 
   // Derive track status from its items.
@@ -129,7 +130,7 @@ export async function setTrackItemStatus(
       .select("status")
       .eq("track_id", item.track_id)
       .eq("user_id", user.id);
-    if (siblingError) return { error: siblingError.message };
+    if (siblingError) return { error: safeActionError(siblingError, "Unable to update this track.") };
     const list = siblings ?? [];
     const trackStatus =
       list.length > 0 && list.every((s) => s.status === "Done")
@@ -157,7 +158,7 @@ export async function deleteTrack(id: string): Promise<ActionResult> {
   // Phases and items cascade via on delete cascade.
   const { error } = await supabase.from("learning_tracks").delete()
     .eq("id", id).eq("user_id", user.id);
-  if (error) return { error: error.message };
+  if (error) return { error: safeActionError(error, "Unable to delete this track.") };
   revalidatePath("/");
   revalidatePath("/tracks");
   return {};
@@ -177,7 +178,7 @@ export async function setTrackStatus(
     .from("learning_tracks")
     .update({ status: parsedStatus.data, updated_at: new Date().toISOString() })
     .eq("id", id).eq("user_id", user.id);
-  if (error) return { error: error.message };
+  if (error) return { error: safeActionError(error, "Unable to update this track.") };
   revalidatePath("/");
   revalidatePath("/tracks");
   revalidatePath(`/tracks/${id}`);
@@ -220,7 +221,7 @@ export async function rescheduleTrackItems(
     .eq("id", trackId)
     .eq("user_id", user.id)
     .maybeSingle();
-  if (trackError) return { error: trackError.message };
+  if (trackError) return { error: safeActionError(trackError, "Unable to load that track.") };
   if (!track) return { error: "That track doesn't exist." };
 
   // RLS scopes this to the caller's own rows; the status and null-date
@@ -232,7 +233,7 @@ export async function rescheduleTrackItems(
     .eq("user_id", user.id)
     .neq("status", "Done")
     .not("target_date", "is", null);
-  if (readError) return { error: readError.message };
+  if (readError) return { error: safeActionError(readError, "Unable to load the track steps.") };
 
   const openDates = (items ?? [])
     .map((i) => i.target_date as string)
@@ -266,7 +267,7 @@ export async function rescheduleTrackItems(
   );
   const results = await Promise.all(updates);
   const failed = results.find((r) => r.error);
-  if (failed?.error) return { error: failed.error.message };
+  if (failed?.error) return { error: safeActionError(failed.error, "Unable to reschedule the track steps.") };
 
   revalidatePath("/");
   revalidatePath("/tracks");

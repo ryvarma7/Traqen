@@ -11,7 +11,12 @@ import { getSiteUrl } from "@/lib/site-url";
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const { searchParams } = requestUrl;
-  const origin = getSiteUrl(requestUrl.origin);
+  let origin: string;
+  try {
+    origin = getSiteUrl(requestUrl.origin);
+  } catch {
+    return NextResponse.json({ error: "Authentication is not configured." }, { status: 500 });
+  }
   const code = searchParams.get("code");
 
   if (code) {

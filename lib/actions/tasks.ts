@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { safeActionError } from "@/lib/action-errors";
 
 type ActionResult = { error?: string };
 
@@ -59,7 +60,7 @@ export async function saveTask(
     ? await supabase.from("tasks").update(payload).eq("id", id).eq("user_id", user.id)
     : await supabase.from("tasks").insert({ ...payload, user_id: user.id });
 
-  if (error) return { error: error.message };
+  if (error) return { error: safeActionError(error, "Unable to save this task.") };
   revalidatePath("/");
   revalidatePath("/tasks");
   return {};
@@ -71,7 +72,7 @@ export async function deleteTask(id: string): Promise<ActionResult> {
   if (!user) return { error: "Not signed in." };
   if (!idSchema.safeParse(id).success) return { error: "Unable to delete this task." };
   const { error } = await supabase.from("tasks").delete().eq("id", id).eq("user_id", user.id);
-  if (error) return { error: error.message };
+  if (error) return { error: safeActionError(error, "Unable to delete this task.") };
   revalidatePath("/");
   revalidatePath("/tasks");
   return {};
@@ -91,7 +92,7 @@ export async function setTaskStatus(
     .from("tasks")
     .update({ status: parsedStatus.data, updated_at: new Date().toISOString() })
     .eq("id", id).eq("user_id", user.id);
-  if (error) return { error: error.message };
+  if (error) return { error: safeActionError(error, "Unable to update this task.") };
   revalidatePath("/");
   revalidatePath("/tasks");
   return {};
@@ -116,7 +117,7 @@ export async function saveTaskNotes(
     .from("tasks")
     .update({ notes: notes.trim() || null, updated_at: new Date().toISOString() })
     .eq("id", id).eq("user_id", user.id);
-  if (error) return { error: error.message };
+  if (error) return { error: safeActionError(error, "Unable to save these notes.") };
   revalidatePath("/");
   revalidatePath("/tasks");
   return {};

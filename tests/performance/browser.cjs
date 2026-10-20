@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
 // Optional, isolated Chromium regression/measurement runner. No new dependency.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");

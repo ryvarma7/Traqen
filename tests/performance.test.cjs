@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 const loadTs = require("./performance/load-ts.cjs");

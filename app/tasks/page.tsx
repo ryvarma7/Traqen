@@ -11,7 +11,9 @@ export default async function TasksPage() {
   // Auth check runs in parallel with the reads; RLS scopes rows to auth.uid().
   const [userRes, tasksRes] = await Promise.all([
     supabase.auth.getUser(),
-    supabase.from("tasks").select("*"),
+    supabase
+      .from("tasks")
+      .select("id, title, description, notes, status, priority, due_date, category, related_type, related_name"),
   ]);
 
   if (!userRes.data.user) redirect("/login");

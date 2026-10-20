@@ -12,7 +12,8 @@ Framer Motion, and Supabase.
 3. Copy `.env.example` to `.env.local` and supply your own Supabase public URL,
    publishable key, and site URL. Never commit `.env.local` or service-role keys.
 4. For a new Supabase project, run `supabase/schema.sql` in its SQL editor.
-   Existing deployments use the applicable incremental SQL files in `supabase/`.
+   Existing Traqen deployments run `supabase/schema-migrations.sql` once after
+   the canonical schema. Do not choose between historical version files.
    Enable Google OAuth and allow `<site-url>/auth/callback` in its redirect URLs.
 5. Run `npm run dev`; open **http://localhost:3000**.
 
@@ -21,15 +22,16 @@ the Raleway font through `next/font/google` and therefore needs network access.
 
 ## Checks
 
-The portable, offline performance regression command (after `npm ci`) is:
+The portable, offline regression command (after `npm ci`) is:
 
 ```sh
-node --test tests/performance.test.cjs
+npm test
 ```
 
-Also run `npm run lint`, `npx --no-install tsc --noEmit --incremental false`, and
-`npm run build` before deploying. Unit tests validate frame-event coalescing,
-bounded entrance timing, and the unchanged contour geometry/brightness.
+The suite validates frame-event coalescing, bounded entrance timing, unchanged
+contour geometry/brightness, and the attention queue's responsive contracts.
+Also run `npm run lint`, `npx --no-install tsc --noEmit --incremental false`,
+and `npm run build` before deploying.
 
 Optional browser regression and measurements, using an installed Chrome/Chromium:
 

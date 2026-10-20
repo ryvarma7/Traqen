@@ -1,6 +1,5 @@
 export type JobApplication = {
   id: string;
-  user_id: string;
   company: string;
   role_type: string | null;
   status: string;
@@ -16,13 +15,10 @@ export type JobApplication = {
   source: string | null;
   contact_person: string | null;
   notes: string | null;
-  created_at: string;
-  updated_at: string;
 };
 
 export type Hackathon = {
   id: string;
-  user_id: string;
   hackathon_name: string;
   organizing_company: string | null;
   type: string | null;
@@ -45,13 +41,10 @@ export type Hackathon = {
   result_rank: string | null;
   project_link: string | null;
   notes: string | null;
-  created_at: string;
-  updated_at: string;
 };
 
 export type Task = {
   id: string;
-  user_id: string;
   title: string;
   description: string | null;
   notes: string | null;
@@ -61,19 +54,15 @@ export type Task = {
   category: string | null;
   related_type: "job" | "hackathon" | null;
   related_name: string | null;
-  created_at: string;
-  updated_at: string;
 };
 
 export type Note = {
   id: string;
-  user_id: string;
   title: string;
   content: string | null;
   pinned: boolean;
   color: string;
   private: boolean;
-  created_at: string;
   updated_at: string;
 };
 
@@ -85,28 +74,23 @@ export type NoteListItem = Pick<
 
 export type DropdownOption = {
   id: string;
-  user_id: string;
   section: "jobs" | "hackathons";
   field_name: string;
   value: string;
-  created_at: string;
 };
 
 export type LearningTrack = {
   id: string;
-  user_id: string;
   title: string;
   description: string | null;
   start_date: string;
   status: "In progress" | "Completed" | "On hold";
   created_at: string;
-  updated_at: string;
 };
 
 export type TrackPhase = {
   id: string;
   track_id: string;
-  user_id: string;
   position: number;
   title: string;
   description: string | null;
@@ -116,15 +100,12 @@ export type TrackItem = {
   id: string;
   track_id: string;
   phase_id: string;
-  user_id: string;
   position: number;
   title: string;
   description: string | null;
   resource_url: string | null;
   target_date: string | null;
   status: "To do" | "In progress" | "Done";
-  created_at: string;
-  updated_at: string;
 };
 
 export const JOB_STATUSES = [
