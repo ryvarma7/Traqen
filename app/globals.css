@@ -380,35 +380,46 @@ body:has(.app-scene)::after {
     outline-offset: 2px;
   }
 
-  /* Compact iOS-style loading indicator for blocking and inline states. */
+  /* Simple Apple-style indeterminate loading bar. The white pill travels from
+     left to right with a gentle speed curve and no decorative effects. */
   .loading-bar {
     position: relative;
     display: inline-block;
+    box-sizing: border-box;
     flex: 0 0 auto;
     overflow: hidden;
     border-radius: 9999px;
-    background: color-mix(in srgb, var(--color-fg) 18%, transparent);
-  }
-  .loading-bar::before,
-  .loading-bar::after {
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: 40%;
-    border-radius: inherit;
-    background: var(--color-fg);
-    content: "";
-    animation: loading-bar-slide 1.2s linear infinite;
-    transform: translate3d(-100%, 0, 0);
-  }
-  /* Stagger constant-speed sweeps so the track never looks idle between loops. */
-  .loading-bar::before {
-    animation-delay: -0.6s;
-    opacity: 0.55;
+    background: color-mix(in srgb, currentColor 16%, transparent);
   }
 
-  @keyframes loading-bar-slide {
-    0% { transform: translate3d(-100%, 0, 0); }
-    100% { transform: translate3d(250%, 0, 0); }
+  .loading-bar::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 38%;
+    border-radius: inherit;
+    background: currentColor;
+    transform: translate3d(-135%, 0, 0) scaleX(0.72);
+    transform-origin: left center;
+    animation: loading-bar-progress 2.2s cubic-bezier(0.25, 0.1, 0.25, 1) infinite;
+  }
+
+  @keyframes loading-bar-progress {
+    0% {
+      transform: translate3d(-135%, 0, 0) scaleX(0.72);
+      animation-timing-function: cubic-bezier(0.42, 0, 1, 1);
+    }
+    22% {
+      transform: translate3d(-12%, 0, 0) scaleX(0.9);
+      animation-timing-function: cubic-bezier(0, 0, 0.58, 1);
+    }
+    64% {
+      transform: translate3d(148%, 0, 0) scaleX(1.08);
+      animation-timing-function: cubic-bezier(0.42, 0, 1, 1);
+    }
+    100% {
+      transform: translate3d(330%, 0, 0) scaleX(0.72);
+    }
   }
 
   /* Loading placeholder blocks for route skeletons. */
@@ -436,13 +447,10 @@ body:has(.app-scene)::after {
       filter: none !important;
     }
     .loading-bar::before {
-      content: none;
+      width: 72%;
       animation: none;
-    }
-    .loading-bar::after {
-      animation: none;
+      opacity: 0.72;
       transform: translate3d(0, 0, 0);
-      width: 100%;
     }
     .skeleton { animation: none; }
   }

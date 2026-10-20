@@ -5,7 +5,7 @@ export function LoadingBar({ className }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
-      className={cn("loading-bar h-1.5 w-24", className)}
+      className={cn("loading-bar h-1.5 w-32", className)}
     />
   );
 }
