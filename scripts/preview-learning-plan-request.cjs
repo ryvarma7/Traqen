@@ -1,9 +1,13 @@
 /**
- * Prints the exact request Traqen sends to NVIDIA NIM for a learning plan.
+ * Prints the exact requests Traqen sends to NVIDIA NIM for a learning plan.
  *
  *   node scripts/preview-learning-plan-request.cjs
  *
  * It never touches the network and never needs an API key.
+ *
+ * A plan is generated in two stages, so there are two kinds of request to
+ * look at: the outline, which decides the shape of the course, and the
+ * enrichment, which writes the instructions for one phase's steps.
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -29,17 +33,18 @@ function loadTs(relative) {
   mod.paths = Module._nodeModulePaths(path.dirname(filename));
   const originalRequire = mod.require.bind(mod);
   mod.require = (request) => {
-    if (request === "@/lib/dates") return loadTs("lib/dates.ts");
+    if (request.startsWith("@/lib/")) {
+      return loadTs(`lib/${request.slice("@/lib/".length)}.ts`);
+    }
     return originalRequire(request);
   };
   mod._compile(code, filename);
   return mod.exports;
 }
 
-const {
-  buildLearningPlanMessages,
-  learningPlanInputSchema,
-} = loadTs("lib/tracks/contract.ts");
+const { learningPlanInputSchema } = loadTs("lib/tracks/contract.ts");
+const { buildOutlineMessages, planScale } = loadTs("lib/tracks/outline.ts");
+const { buildEnrichMessages } = loadTs("lib/tracks/enrich.ts");
 const { buildNvidiaRequestBody } = loadTs("lib/nvidia.ts");
 
 const MODEL = process.env.NVIDIA_MODEL || "nvidia/nemotron-3-ultra-550b-a55b";
@@ -51,7 +56,7 @@ const THINKING = !(THINKING_VALUE === "off" || THINKING_VALUE === "false" || THI
 const EFFORT = ["medium", "low"].includes(
   (process.env.NVIDIA_THINKING_EFFORT || "").trim().toLowerCase()
 )
-  ? (process.env.NVIDIA_THINKING_EFFORT || "").trim().toLowerCase()
+  ? process.env.NVIDIA_THINKING_EFFORT.trim().toLowerCase()
   : "full";
 
 // ── Test data, as the Tracks form would send it ──────────────────────────
@@ -66,8 +71,7 @@ const formInput = {
 
 const input = learningPlanInputSchema.parse(formInput);
 
-function requestFor({ compact = false, thinking = THINKING, planInput = input } = {}) {
-  const { system, user } = buildLearningPlanMessages(planInput, { compact, today: TODAY });
+function requestFor({ system, user, thinking, effort }) {
   const messages = [
     { role: "system", content: system },
     { role: "user", content: user },
@@ -79,7 +83,7 @@ function requestFor({ compact = false, thinking = THINKING, planInput = input } 
       Accept: "application/json",
       Authorization: "Bearer <NVIDIA_API_KEY>",
     },
-    body: buildNvidiaRequestBody(MODEL, messages, { thinking, effort: EFFORT }),
+    body: buildNvidiaRequestBody(MODEL, messages, { thinking, effort }),
   };
 }
 
@@ -88,40 +92,108 @@ function print(title, text) {
   console.log(text);
 }
 
-const main = requestFor();
+function sizeOf(value) {
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return `${text.length} chars (~${Math.round(text.length / 4)} tokens)`;
+}
+
+// ── Stage 1: the outline ─────────────────────────────────────────────────
+const outlineMessages = buildOutlineMessages(input, { today: TODAY });
+const outline = requestFor({
+  system: outlineMessages.system,
+  user: outlineMessages.user,
+  thinking: THINKING,
+  // The outline is the only stage that reasons: designing a curriculum is
+  // the one part that needs the model to weigh shapes before committing.
+  effort: "medium",
+});
 
 print("1. FORM INPUT (the Tracks form payload)", JSON.stringify(formInput, null, 2));
 
 print(
-  "2. REQUEST LINE + HEADERS (what goes over the wire)",
+  "2. OUTLINE REQUEST LINE + HEADERS (what goes over the wire)",
   [
-    `POST ${main.endpoint}`,
-    ...Object.entries(main.headers).map(([key, value]) => `${key}: ${value}`),
+    `POST ${outline.endpoint}`,
+    ...Object.entries(outline.headers).map(([key, value]) => `${key}: ${value}`),
   ].join("\n")
 );
 
 print(
-  "3. SYSTEM MESSAGE (the contract: role, curriculum rules, schedule context, schema, example)",
-  main.body.messages[0].content
+  "3. OUTLINE SYSTEM MESSAGE (the contract: role, curriculum rules, schedule context, schema, example)",
+  outline.body.messages[0].content
 );
 
-print("4. USER MESSAGE (the untrusted user data only)", main.body.messages[1].content);
+print("4. OUTLINE USER MESSAGE (the untrusted user data only)", outline.body.messages[1].content);
 
 print(
-  "5. FULL REQUEST BODY (exactly what fetch() sends as JSON.stringify(body))",
-  JSON.stringify(main.body, null, 2)
+  "5. OUTLINE REQUEST BODY (exactly what fetch() sends as JSON.stringify(body))",
+  JSON.stringify(outline.body, null, 2)
 );
 
-const compact = requestFor({ compact: true });
+const compactMessages = buildOutlineMessages(input, { compact: true, today: TODAY });
+const compact = requestFor({
+  system: compactMessages.system,
+  user: compactMessages.user,
+  thinking: false,
+  effort: EFFORT,
+});
 print(
-  "6. COMPACT RETRY BODY (fallback when the first answer is truncated or invalid)",
+  "6. COMPACT OUTLINE RETRY (fallback when the first answer is truncated or invalid)",
   JSON.stringify(compact.body, null, 2)
 );
 
-const openEnded = learningPlanInputSchema.parse({ ...formInput, endDate: null });
-const openEndedMessages = buildLearningPlanMessages(openEnded, { today: TODAY });
+// ── Stage 2: the enrichment ──────────────────────────────────────────────
+const scale = planScale(83);
+const enrichMessages = buildEnrichMessages({
+  trackTitle: "Ship a deployed classifier behind a TypeScript API",
+  trackDescription:
+    "A hands-on course for web developers who want to ship a real model in production.",
+  topic: input.topic,
+  phase: {
+    title: "Training and evaluating your first model",
+    description:
+      "You fit a tabular classifier and read its evaluation numbers. Exit criteria: you can say whether the model is good enough to ship.",
+    steps: [
+      {
+        index: 0,
+        title: "Load the tabular dataset and split it into train and test sets",
+        objective:
+          "Read the CSV into a dataframe, split it 80/20, and check that the label column is balanced.",
+      },
+      {
+        index: 1,
+        title: "Fit a baseline classifier and record its score",
+        objective:
+          "Train a logistic regression on the training split and write the accuracy down.",
+      },
+    ],
+  },
+});
+const enrich = requestFor({
+  system: enrichMessages.system,
+  user: enrichMessages.user,
+  // The course is already designed. The reasoning trace would be pure cost.
+  thinking: false,
+  effort: EFFORT,
+});
+
 print(
-  "7. OPEN-ENDED VARIANT (no end date): the lines that differ in the system message",
+  "7. ENRICHMENT SYSTEM MESSAGE (the writing brief for one phase)",
+  enrich.body.messages[0].content
+);
+
+print("8. ENRICHMENT USER MESSAGE (the phase, as untrusted data)", enrich.body.messages[1].content);
+
+print(
+  "9. ENRICHMENT REQUEST BODY (one call per phase, up to four at a time)",
+  JSON.stringify(enrich.body, null, 2)
+);
+
+// ── The open-ended variant ───────────────────────────────────────────────
+const openEnded = learningPlanInputSchema.parse({ ...formInput, endDate: null });
+const openEndedMessages = buildOutlineMessages(openEnded, { today: TODAY });
+print(
+  "10. OPEN-ENDED VARIANT (no end date): the lines that differ in the system message",
   openEndedMessages.system
     .split("\n")
     .filter((line) =>
@@ -130,6 +202,17 @@ print(
     .join("\n")
 );
 
+console.log("\nSizes");
 console.log(
-  `\nSizes — system: ${main.body.messages[0].content.length} chars, user: ${main.body.messages[1].content.length} chars, body: ${JSON.stringify(main.body).length} chars (~${Math.round(JSON.stringify(main.body).length / 4)} tokens)`
+  `  outline system : ${sizeOf(outline.body.messages[0].content)}`
+);
+console.log(`  outline user   : ${sizeOf(outline.body.messages[1].content)}`);
+console.log(`  outline body   : ${sizeOf(outline.body)}`);
+console.log(
+  `  enrich system  : ${sizeOf(enrich.body.messages[0].content)}`
+);
+console.log(`  enrich user    : ${sizeOf(enrich.body.messages[1].content)}`);
+console.log(`  enrich body    : ${sizeOf(enrich.body)}`);
+console.log(
+  `\nPlan size for a 12-week window: ${scale.phases} phases, ${scale.minSteps}-${scale.maxSteps} steps per phase (${scale.phases * scale.minSteps}-${scale.phases * scale.maxSteps} steps).`
 );

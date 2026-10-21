@@ -587,20 +587,29 @@ export function ImportTrackModal({
                     {totalItems} steps
                   </span>
                 </div>
-                <div className="max-h-44 space-y-2 overflow-y-auto border-t border-border pt-3">
+                <div className="max-h-64 space-y-3 overflow-y-auto border-t border-border pt-3">
                   {track.phases.map((phase, phaseIndex) => (
                     <div key={`${phase.title}-${phaseIndex}`}>
                       <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                         {phase.title}
                       </p>
-                      <ul className="mt-1 space-y-0.5 pl-3">
+                      {phase.description && (
+                        <p className="mt-0.5 line-clamp-2 text-2xs leading-relaxed text-muted-foreground/70">
+                          {phase.description}
+                        </p>
+                      )}
+                      <ul className="mt-1 space-y-1.5 pl-3">
                         {phase.items.map((item, itemIndex) => (
-                          <li
-                            key={`${item.title}-${itemIndex}`}
-                            className="flex items-baseline gap-2 text-xs text-foreground/85"
-                          >
-                            <span className="h-1 w-1 shrink-0 translate-y-[-1px] rounded-full bg-white/40" />
-                            <span className="truncate">{item.title}</span>
+                          <li key={`${item.title}-${itemIndex}`}>
+                            <div className="flex items-baseline gap-2 text-xs text-foreground/85">
+                              <span className="h-1 w-1 shrink-0 translate-y-[-1px] rounded-full bg-white/40" />
+                              <span className="min-w-0 flex-1">{item.title}</span>
+                            </div>
+                            {item.description && (
+                              <p className="mt-0.5 line-clamp-2 pl-3 text-2xs leading-relaxed text-muted-foreground/80">
+                                {item.description}
+                              </p>
+                            )}
                           </li>
                         ))}
                       </ul>

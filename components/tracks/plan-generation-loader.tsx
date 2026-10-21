@@ -39,8 +39,14 @@ export function PlanGenerationLoader({ topic }: { topic?: string }) {
       <div className="mt-6 space-y-2">
         <p className="text-base font-semibold text-foreground">Building your learning plan</p>
         <p className="max-w-xs text-xs leading-relaxed text-muted-foreground">
-          {topicLabel ? `A practical path is being shaped for ${topicLabel}.` : "A practical path is being shaped around your goals."}
+          {topicLabel
+            ? `Designing a detailed path for ${topicLabel}, then writing the instructions for every step.`
+            : "Designing a detailed path around your goals, then writing the instructions for every step."}
         </p>
+        {/* A plan this size takes a couple of minutes: the course is designed
+            in one pass, then every phase is written out in parallel. Saying so
+            beats a spinner that looks stuck. */}
+        <p className="text-2xs text-muted-foreground/60">This takes up to a couple of minutes.</p>
       </div>
 
       <div className="mt-6 flex items-center gap-1.5" aria-hidden="true">
@@ -57,7 +63,7 @@ export function PlanGenerationLoader({ topic }: { topic?: string }) {
           />
         ))}
       </div>
-      <span className="sr-only">This can take a few moments.</span>
+      <span className="sr-only">This can take a couple of minutes.</span>
     </motion.div>
   );
 }

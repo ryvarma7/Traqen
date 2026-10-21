@@ -53,10 +53,30 @@ with the server-only `NVIDIA_API_KEY` and the model id in `NVIDIA_MODEL`
 - **The contract travels in the system message** (curriculum rules, schedule
   context, schema and a format example), while the user's own text travels in
   the user message as untrusted plain text.
-- **The compact retry** re-asks with a shorter contract and the reasoning
-  trace off, for the case where the first answer was truncated, missed the
-  contract, or ran long. The two attempts share the 240 seconds the Tracks
-  action is allowed: 180 s for the first attempt, 50 s for the retry.
+- **A plan is generated in two stages.** The *outline* is one reasoned call
+  that decides the whole course — its title, its phases, and every step's
+  title, objective and date. The *enrichment* is one small call per phase,
+  written with the reasoning off, that expands each objective into the full
+  why/what/done/check instruction and attaches a resource. The phases are
+  independent, so they run concurrently.
+  Splitting it this way is what makes a much bigger plan affordable: the
+  outline's answer is small (one short objective per step) and the expensive
+  per-step prose is written in small, parallel, single-phase calls instead of
+  one enormous call that would run out of time.
+- **How big a plan gets is set by the window.** `lib/tracks/outline.ts` scales
+  the phase and step counts to the number of days available — up to 36 steps
+  for a long course, against the 16 the old single-stage contract asked for.
+  The ceiling is a time budget, not a taste decision: every step costs answer
+  tokens, and the outline shares its output budget with its own reasoning.
+- **The compact retry** re-asks the outline with a smaller plan and the
+  reasoning trace off, for the case where the first answer was truncated,
+  missed the contract, or ran long.
+- **A failed enrichment costs detail, not the plan.** The enrichment can only
+  add a description and a resource; it can never move a step, rename it or
+  change its date. A phase whose enrichment fails keeps the outline's
+  objective as its step descriptions, so the plan is always complete.
+- The three stages share the 240 seconds the Tracks action is allowed: 160 s
+  for the outline, 30 s for the compact retry, 30 s for the enrichment.
 - `NVIDIA_BASE_URL` is optional and overrides the API origin, for example
   `http://localhost:8000/v1` for a self-hosted NIM.
 

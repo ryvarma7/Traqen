@@ -7,25 +7,56 @@ import { safeActionError } from "@/lib/action-errors";
 import { NvidiaRequestError, generateNvidiaText } from "@/lib/nvidia";
 import { createClient } from "@/lib/supabase/server";
 import {
-  buildLearningPlanMessages,
   learningPlanInputSchema,
-  parseGeneratedTrack,
   resolveOffset,
   trackSchema,
   type LearningPlanInput,
   type ParsedTrack,
 } from "@/lib/tracks/contract";
+import {
+  buildEnrichMessages,
+  mergeEnrichment,
+  parseEnrichment,
+  type EnrichmentPhase,
+} from "@/lib/tracks/enrich";
+import { buildOutlineMessages, parseOutline } from "@/lib/tracks/outline";
 
 const DAILY_LEARNING_PLAN_LIMIT = 5;
 
-// The Tracks page allows 240 seconds of server action time. The full attempt
-// gets most of it, and the compact retry keeps enough left to still return a
-// plan when the first answer was truncated, missed the contract, or ran long.
-// The hosted endpoint generates roughly 40 to 55 tokens a second for this
-// model, and a reasoned plan lands between 150 and 180 seconds, so the
-// budgets are sized for the answer length rather than for the request.
-const REASONED_TIMEOUT_MS = 180_000;
-const COMPACT_RETRY_TIMEOUT_MS = 50_000;
+// A plan is generated in two stages.
+//
+// The outline is the expensive, single, reasoned call: it decides the whole
+// curriculum and answers with the shape of the course, so it carries the
+// reasoning budget. The enrichment is one small call per phase, with the
+// reasoning off: writing the instructions for six steps does not need a
+// model to weigh curriculum shapes.
+//
+// The budgets add up to less than the 240 seconds the Tracks action is
+// allowed to run for, so the worst case — the outline timing out, the
+// compact outline being attempted, and the enrichment running — still lands
+// inside the limit with room to spare.
+const OUTLINE_TIMEOUT_MS = 160_000;
+const COMPACT_OUTLINE_TIMEOUT_MS = 30_000;
+const ENRICH_TIMEOUT_MS = 30_000;
+
+/**
+ * How many enrichment calls may be in flight at once.
+ *
+ * The phases are independent, so they can all go out together, and each one
+ * is a small request that answers in a fraction of the outline's time — so
+ * running them all at once costs one round, not two. The limit is here to
+ * bound a pathological plan, not to throttle a normal one.
+ */
+const ENRICH_CONCURRENCY = 8;
+
+/**
+ * A pause between starting the enrichment calls, in milliseconds.
+ *
+ * A plan of seven phases would otherwise put seven requests on the provider
+ * in the same instant. A short stagger spreads them out at no real cost to
+ * the total time, and it gives a rate limiter room to breathe.
+ */
+const ENRICH_STAGGER_MS = 200;
 
 export type LearningPlanErrorCode =
   | "UNAUTHENTICATED"
@@ -243,6 +274,168 @@ async function readLearningPlanQuota(
   };
 }
 
+/**
+ * Stage 1 — the outline.
+ *
+ * One reasoned call that decides the whole course: its title, its phases,
+ * and every step's title, objective and date. A model can stop after
+ * producing valid-looking prose or partial JSON, especially when the
+ * configured model has a smaller effective output budget, so a compact
+ * retry is attempted before the stage gives up. Provider failures are not
+ * retried here because generateNvidiaText already handles transient HTTP
+ * retries.
+ */
+async function generateOutline(
+  input: LearningPlanInput
+): Promise<ParsedTrack | null> {
+  for (const compact of [false, true]) {
+    try {
+      const { system, user } = buildOutlineMessages(input, { compact });
+      // The first attempt lets the model reason before it answers, so it
+      // designs the curriculum properly. The compact retry turns the
+      // reasoning off: it exists precisely because the first attempt ran
+      // out of budget or missed the contract, and a lean request is far
+      // more likely to land inside the time left.
+      const raw = await generateNvidiaText(user, {
+        system,
+        thinking: compact ? false : undefined,
+        effort: compact ? undefined : "medium",
+        timeoutMs: compact ? COMPACT_OUTLINE_TIMEOUT_MS : OUTLINE_TIMEOUT_MS,
+      });
+      const parsed = parseOutline(raw, input);
+      if (parsed.ok) return parsed.outline;
+
+      console.warn("NVIDIA NIM learning plan outline did not match the contract", {
+        attempt: compact ? 2 : 1,
+        reason: parsed.error,
+        responseLength: raw.length,
+      });
+    } catch (error) {
+      if (
+        error instanceof NvidiaRequestError &&
+        !compact &&
+        (error.code === "incomplete" || error.code === "timeout")
+      ) {
+        console.warn(
+          error.code === "timeout"
+            ? "NVIDIA NIM learning plan outline timed out; retrying compact output"
+            : "NVIDIA NIM learning plan outline was truncated; retrying compact output",
+          {
+            attempt: 1,
+            status: error.status,
+          }
+        );
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Runs `worker` over every item with at most `limit` calls in flight at
+ * once, and settles every one of them.
+ *
+ * A rejected call is reported rather than thrown, so one phase failing does
+ * not take the rest of the plan down with it.
+ */
+async function mapWithLimit<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<R>
+): Promise<PromiseSettledResult<R>[]> {
+  const results = new Array<PromiseSettledResult<R>>(items.length);
+  let cursor = 0;
+
+  const runner = async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      try {
+        results[index] = { status: "fulfilled", value: await worker(items[index], index) };
+      } catch (reason) {
+        results[index] = { status: "rejected", reason };
+      }
+    }
+  };
+
+  const workers = Math.max(1, Math.min(limit, items.length));
+  await Promise.all(Array.from({ length: workers }, runner));
+  return results;
+}
+
+/**
+ * Stage 2 — the per-phase enrichment.
+ *
+ * Every phase is written by its own call, and all of them run at once. A
+ * phase whose enrichment fails keeps the outline's objective as its step
+ * descriptions, so a plan is always complete and readable: the worst a
+ * failed call leaves behind is a one-line instruction instead of a detailed
+ * one.
+ */
+async function enrichOutline(
+  outline: ParsedTrack,
+  input: LearningPlanInput
+): Promise<ParsedTrack> {
+  const briefs: EnrichmentPhase[] = outline.phases.map((phase) => ({
+    title: phase.title,
+    description: phase.description ?? null,
+    steps: phase.items.map((item, index) => ({
+      index,
+      title: item.title,
+      // The outline's objective is the seed the instruction is written from.
+      objective: item.description ?? item.title,
+    })),
+  }));
+
+  const results = await mapWithLimit(briefs, ENRICH_CONCURRENCY, async (phase, index) => {
+    if (index > 0) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, ENRICH_STAGGER_MS * index)
+      );
+    }
+    const { system, user } = buildEnrichMessages({
+      trackTitle: outline.track_title,
+      trackDescription: outline.description ?? null,
+      topic: input.topic,
+      phase,
+    });
+    const raw = await generateNvidiaText(user, {
+      system,
+      // The course is already designed. There is nothing left to weigh, so
+      // the reasoning trace is pure cost here.
+      thinking: false,
+      timeoutMs: ENRICH_TIMEOUT_MS,
+    });
+    const parsed = parseEnrichment(raw);
+    if (!parsed.ok) {
+      console.warn("NVIDIA NIM learning plan enrichment did not match the contract", {
+        phase: phase.title,
+        reason: parsed.error,
+        responseLength: raw.length,
+      });
+      return null;
+    }
+    return parsed.steps;
+  });
+
+  const { track, failedPhases } = mergeEnrichment(
+    outline,
+    results.map((result) => (result.status === "fulfilled" ? result.value : null))
+  );
+
+  const stepCount = track.phases.reduce((count, phase) => count + phase.items.length, 0);
+  console.info("NVIDIA NIM learning plan generated", {
+    phases: track.phases.length,
+    steps: stepCount,
+    failedPhases,
+  });
+
+  return track;
+}
+
 /** Generates a validated learning plan without persisting it. */
 export async function generateLearningPlan(
   input: LearningPlanInput
@@ -288,70 +481,38 @@ export async function generateLearningPlan(
   }
 
   try {
-    // A model can stop after producing valid-looking prose or partial JSON,
-    // especially when the configured model has a smaller effective output
-    // budget. Retry once with a deliberately compact contract before showing
-    // an error to the user. Provider failures are not retried here because
-    // generateNvidiaText already handles transient HTTP retries.
-    for (const compact of [false, true]) {
-      try {
-        const { system, user } = buildLearningPlanMessages(parsedInput.data, {
-          compact,
-        });
-        // The first attempt lets the model reason before it answers, so it
-        // designs the curriculum properly. The compact retry turns the
-        // reasoning off: it exists precisely because the first attempt ran
-        // out of budget or missed the contract, and a lean request is far
-        // more likely to land inside the time left.
-        //
-        // The two timeouts add up to the 240 seconds the Tracks action is
-        // allowed to run for: the first attempt gets the time it needs, and
-        // the compact retry still has room to produce a plan.
-        const raw = await generateNvidiaText(user, {
-          system,
-          thinking: compact ? false : undefined,
-          timeoutMs: compact ? COMPACT_RETRY_TIMEOUT_MS : REASONED_TIMEOUT_MS,
-        });
-        const parsedTrack = parseGeneratedTrack(raw, parsedInput.data);
-        if (parsedTrack.ok) {
-          return {
-            track: parsedTrack.track,
-            remaining: quota.remaining,
-            resetDate: quota.resetDate,
-          };
-        }
+    const outline = await generateOutline(parsedInput.data);
+    if (!outline) {
+      return {
+        remaining: quota.remaining,
+        resetDate: quota.resetDate,
+        error: "The generated learning plan could not be validated.",
+        code: "INVALID_PLAN",
+      };
+    }
 
-        console.warn("NVIDIA NIM learning plan did not match the contract", {
-          attempt: compact ? 2 : 1,
-          reason: parsedTrack.error,
-          responseLength: raw.length,
-        });
-      } catch (error) {
-        if (
-          error instanceof NvidiaRequestError &&
-          !compact &&
-          (error.code === "incomplete" || error.code === "timeout")
-        ) {
-          console.warn(
-            error.code === "timeout"
-              ? "NVIDIA NIM learning plan timed out; retrying compact output"
-              : "NVIDIA NIM learning plan was truncated; retrying compact output",
-            {
-              attempt: 1,
-              status: error.status,
-            }
-          );
-          continue;
-        }
-        throw error;
-      }
+    const merged = await enrichOutline(outline, parsedInput.data);
+
+    // The final gate. The merge only ever adds detail to steps the outline
+    // already validated, so this should never fail — but the plan is what
+    // gets written to the database, so it is checked as a whole.
+    const validated = trackSchema.safeParse(merged);
+    if (!validated.success) {
+      console.warn("NVIDIA NIM learning plan failed the final validation", {
+        issues: validated.error.issues.slice(0, 5).map((issue) => issue.path.join(".")),
+      });
+      return {
+        remaining: quota.remaining,
+        resetDate: quota.resetDate,
+        error: "The generated learning plan could not be validated.",
+        code: "INVALID_PLAN",
+      };
     }
 
     return {
+      track: validated.data,
       remaining: quota.remaining,
       resetDate: quota.resetDate,
-      error: "The generated learning plan could not be validated.",
-      code: "INVALID_PLAN",
     };
   } catch (error) {
     if (error instanceof NvidiaRequestError) {
