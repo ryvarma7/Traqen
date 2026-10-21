@@ -1,40 +1,8 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const fs = require("node:fs");
-const path = require("node:path");
-const Module = require("node:module");
-const ts = require("typescript");
+const { createLoader } = require("./helpers/load-ts.cjs");
 
-const root = path.resolve(__dirname, "..");
-const cache = new Map();
-
-function loadTs(relative) {
-  const filename = path.resolve(root, relative);
-  if (cache.has(filename)) return cache.get(filename).exports;
-
-  const source = fs.readFileSync(filename, "utf8");
-  const code = ts.transpileModule(source, {
-    compilerOptions: {
-      target: ts.ScriptTarget.ES2020,
-      module: ts.ModuleKind.CommonJS,
-      esModuleInterop: true,
-    },
-    fileName: filename,
-  }).outputText;
-
-  const mod = new Module(filename, module);
-  mod.filename = filename;
-  mod.paths = Module._nodeModulePaths(path.dirname(filename));
-  cache.set(filename, mod);
-
-  const originalRequire = mod.require.bind(mod);
-  mod.require = (request) => {
-    if (request === "@/lib/dates") return loadTs("lib/dates.ts");
-    return originalRequire(request);
-  };
-  mod._compile(code, filename);
-  return mod.exports;
-}
+const loadTs = createLoader();
 
 const {
   buildLearningPlanMessages,

@@ -15,6 +15,7 @@ import { buildCalendarEvents, groupByDate } from "@/lib/calendar";
 import { daysUntil } from "@/lib/dates";
 import { priorityRank } from "@/lib/priority";
 import { createClient } from "@/lib/supabase/server";
+import { nextStepByTrack as nextStepByTrackFor } from "@/lib/track-plan";
 import {
   ACTIVE_HACKATHON_STATUSES,
   ACTIVE_JOB_STATUSES,
@@ -73,6 +74,7 @@ export default async function HubPage({
     tasksRes,
     notesRes,
     tracksRes,
+    trackPhasesRes,
     trackItemsRes,
   ] = await Promise.all([
     supabase.auth.getUser(),
@@ -90,7 +92,10 @@ export default async function HubPage({
       .order("updated_at", { ascending: false })
       .limit(24),
     supabase.from("learning_tracks").select("id, title, status"),
-    supabase.from("track_items").select("id, track_id, title, status, target_date, position"),
+    supabase.from("track_phases").select("id, track_id, position"),
+    supabase
+      .from("track_items")
+      .select("id, track_id, phase_id, title, status, target_date, position"),
   ]);
 
   if (!userRes.data.user) redirect("/login");
@@ -112,6 +117,7 @@ export default async function HubPage({
   const tasks = tasksRes.data ?? [];
   const notes = (notesRes.data ?? []) as NotePreview[];
   const tracks = tracksRes.data ?? [];
+  const trackPhases = trackPhasesRes.data ?? [];
   const trackItems = trackItemsRes.data ?? [];
   const trackTitles = new Map(tracks.map((t) => [t.id, t.title]));
 
@@ -313,23 +319,10 @@ export default async function HubPage({
 
   // Only the next unfinished step per active track. An imported plan is a long
   // ordered list of dated steps; surfacing all of them turns the queue into a
-  // syllabus and buries a real deadline behind it.
-  const nextStepByTrack = new Map<string, (typeof trackItems)[number]>();
-  for (const item of trackItems) {
-    if (item.status === "Done") continue;
-    const track = tracks.find((candidate) => candidate.id === item.track_id);
-    if (!track || track.status === "Completed" || track.status === "On hold") continue;
-    const seen = nextStepByTrack.get(item.track_id);
-    const itemDate = item.target_date ?? "9999-12-31";
-    const seenDate = seen?.target_date ?? "9999-12-31";
-    if (
-      !seen ||
-      itemDate < seenDate ||
-      (itemDate === seenDate && item.position < (seen.position ?? Number.MAX_SAFE_INTEGER))
-    ) {
-      nextStepByTrack.set(item.track_id, item);
-    }
-  }
+  // syllabus and buries a real deadline behind it. The step is derived by the
+  // same rule the track page uses, so the hub and the track page can never
+  // disagree about what "next" means.
+  const nextStepByTrack = nextStepByTrackFor(tracks, trackPhases, trackItems);
   for (const item of nextStepByTrack.values()) {
     const trackTitle = trackTitles.get(item.track_id) ?? "Track";
     if (item.target_date) {
@@ -399,6 +392,7 @@ export default async function HubPage({
       follow_up_date: h.follow_up_date,
     })),
     trackItems: trackItems.map((i) => ({
+      id: i.id,
       track_id: i.track_id,
       title: i.title,
       status: i.status,

@@ -50,7 +50,7 @@ export function buildCalendarEvents(input: {
   tasks: { id: string; title: string; status: string; due_date: string | null }[];
   jobs: { id: string; company: string; status: string; deadline: string | null; follow_up_date: string | null }[];
   hackathons: { id: string; hackathon_name: string; status: string; start_date: string | null; deadline: string | null; follow_up_date: string | null }[];
-  trackItems: { track_id: string; title: string; status: string; target_date: string | null }[];
+  trackItems: { id: string; track_id: string; title: string; status: string; target_date: string | null }[];
   trackTitles: Map<string, string>;
 }): CalendarEvent[] {
   const events: CalendarEvent[] = [];
@@ -115,7 +115,10 @@ export function buildCalendarEvents(input: {
   for (const item of input.trackItems) {
     if (!item.target_date) continue;
     collect(events, {
-      id: `${item.track_id}-${item.title}`,
+      // The step's own id, not its title. Two steps inside one track can
+      // easily share a title ("Review the chapter"), and a repeated id
+      // would collide as a React key in the month grid and the agenda list.
+      id: item.id,
       title: `${input.trackTitles.get(item.track_id) ?? "Track"} · ${item.title}`,
       meta: "Course step",
       source: "track",

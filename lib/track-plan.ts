@@ -1,5 +1,5 @@
-import { addDaysISO, daysUntil, diffDaysISO } from "@/lib/dates";
-import type { TrackItem, TrackPhase } from "@/lib/types";
+import { addDaysISO, diffDaysISO, todayISO } from "@/lib/dates";
+import type { LearningTrack, TrackItem, TrackPhase } from "@/lib/types";
 
 /**
  * Pure derivations over a track's phases + items. Everything here is a
@@ -11,14 +11,26 @@ import type { TrackItem, TrackPhase } from "@/lib/types";
  * Nothing in the schema tracks it, so it can never drift out of sync.
  */
 
+/** The fields a phase needs to be ordered and ranged. */
+export type ProgressPhase = Pick<TrackPhase, "id" | "track_id" | "position">;
+
+/** The fields a step needs to be ordered, dated and counted. */
+export type ProgressItem = Pick<
+  TrackItem,
+  "id" | "track_id" | "phase_id" | "position" | "status" | "target_date"
+>;
+
 export type PhaseState = "done" | "current" | "upcoming";
 
-export type PhaseProgress = {
-  phase: TrackPhase;
+export type PhaseProgress<
+  P extends ProgressPhase = TrackPhase,
+  I extends ProgressItem = TrackItem
+> = {
+  phase: P;
   /** 0-based position for the "Phase N" label. */
   index: number;
   /** Items in this phase, ordered by their stored position. */
-  items: TrackItem[];
+  items: I[];
   done: number;
   total: number;
   state: PhaseState;
@@ -28,13 +40,13 @@ export type PhaseProgress = {
 
 /** Open = not done. Rows still sitting at "In progress" (a state the UI no
  *  longer offers, kept for data compatibility) count as open. */
-function isOpen(item: TrackItem) {
+function isOpen(item: { status: string }) {
   return item.status !== "Done";
 }
 
 /** Within a phase, the earliest deadline wins; undated steps sort last and
  *  fall back to their stored order. */
-function byDueThenPosition(a: TrackItem, b: TrackItem) {
+function byDueThenPosition(a: ProgressItem, b: ProgressItem) {
   const ad = a.target_date ?? "9999-12-31";
   const bd = b.target_date ?? "9999-12-31";
   if (ad !== bd) return ad < bd ? -1 : 1;
@@ -42,11 +54,11 @@ function byDueThenPosition(a: TrackItem, b: TrackItem) {
 }
 
 /** Joins phases to their items and derives each phase's state and date range. */
-export function buildPhaseProgress(
-  phases: TrackPhase[],
-  items: TrackItem[]
-): PhaseProgress[] {
-  const byPhase = new Map<string, TrackItem[]>();
+export function buildPhaseProgress<
+  P extends ProgressPhase = TrackPhase,
+  I extends ProgressItem = TrackItem
+>(phases: P[], items: I[]): PhaseProgress<P, I>[] {
+  const byPhase = new Map<string, I[]>();
   for (const item of items) {
     const list = byPhase.get(item.phase_id);
     if (list) list.push(item);
@@ -87,13 +99,64 @@ export function buildPhaseProgress(
 
 /** The task the user should do next: the first open item in phase order, and
  *  within that phase the earliest deadline. Null once everything is done. */
-export function upNextItem(progress: PhaseProgress[]): TrackItem | null {
+export function upNextItem<
+  P extends ProgressPhase = TrackPhase,
+  I extends ProgressItem = TrackItem
+>(progress: PhaseProgress<P, I>[]): I | null {
   for (const p of progress) {
     const open = p.items.filter(isOpen);
     if (open.length === 0) continue;
     return [...open].sort(byDueThenPosition)[0];
   }
   return null;
+}
+
+/**
+ * The next unfinished step for every active track.
+ *
+ * One step per track, and never more: an imported plan is a long ordered list
+ * of dated steps, and surfacing all of them turns an action queue into a
+ * syllabus and buries a real deadline behind it.
+ *
+ * The result is the same step the track's own page calls "up next", because
+ * it is derived from the same ordering rather than a second, looser rule.
+ * Completed and on-hold tracks are skipped — there is nothing to pick up.
+ */
+export function nextStepByTrack<
+  P extends ProgressPhase = TrackPhase,
+  I extends ProgressItem = TrackItem
+>(
+  tracks: Pick<LearningTrack, "id" | "status">[],
+  phases: P[],
+  items: I[]
+): Map<string, I> {
+  const phasesByTrack = new Map<string, P[]>();
+  for (const phase of phases) {
+    const list = phasesByTrack.get(phase.track_id);
+    if (list) list.push(phase);
+    else phasesByTrack.set(phase.track_id, [phase]);
+  }
+
+  const itemsByTrack = new Map<string, I[]>();
+  for (const item of items) {
+    const list = itemsByTrack.get(item.track_id);
+    if (list) list.push(item);
+    else itemsByTrack.set(item.track_id, [item]);
+  }
+
+  const next = new Map<string, I>();
+  for (const track of tracks) {
+    if (track.status === "Completed" || track.status === "On hold") continue;
+
+    const trackPhases = (phasesByTrack.get(track.id) ?? []).sort(
+      (a, b) => a.position - b.position
+    );
+    const step = upNextItem(
+      buildPhaseProgress(trackPhases, itemsByTrack.get(track.id) ?? [])
+    );
+    if (step) next.set(track.id, step);
+  }
+  return next;
 }
 
 export type Pace = {
@@ -103,14 +166,20 @@ export type Pace = {
 };
 
 /** Pace is measured purely off deadlines: an open task whose date has passed
- *  puts the track behind by however many days ago that was. */
-export function paceOf(items: TrackItem[]): Pace {
+ *  puts the track behind by however many days ago that was.
+ *
+ *  `today` is injectable so the result can be reasoned about without reading
+ *  the wall clock; it defaults to the current local date. */
+export function paceOf(
+  items: TrackItem[],
+  today: string = todayISO()
+): Pace {
   let behindDays = 0;
   let overdueCount = 0;
 
   for (const item of items) {
     if (!isOpen(item) || !item.target_date) continue;
-    const overdue = -daysUntil(item.target_date);
+    const overdue = -diffDaysISO(today, item.target_date);
     if (overdue > 0) {
       overdueCount += 1;
       if (overdue > behindDays) behindDays = overdue;
@@ -124,16 +193,22 @@ export type NextDue = { item: TrackItem; days: number };
 
 /** The next deadline the user is actually racing: the earliest open date. A
  *  task still in the future wins over an already-overdue one; if everything
- *  is overdue we surface the least-bad one rather than nothing at all. */
-export function nextDueItem(items: TrackItem[]): NextDue | null {
+ *  is overdue we surface the least-bad one rather than nothing at all.
+ *
+ *  `today` is injectable so the result can be reasoned about without reading
+ *  the wall clock; it defaults to the current local date. */
+export function nextDueItem(
+  items: TrackItem[],
+  today: string = todayISO()
+): NextDue | null {
   const dated = items
     .filter((i) => isOpen(i) && i.target_date)
     .sort(byDueThenPosition);
   if (dated.length === 0) return null;
 
-  const upcoming = dated.find((i) => daysUntil(i.target_date!) >= 0);
+  const upcoming = dated.find((i) => diffDaysISO(today, i.target_date!) >= 0);
   const item = upcoming ?? dated[dated.length - 1];
-  return { item, days: daysUntil(item.target_date!) };
+  return { item, days: diffDaysISO(today, item.target_date!) };
 }
 
 /**

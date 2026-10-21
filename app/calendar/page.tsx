@@ -17,7 +17,7 @@ export default async function CalendarPage() {
       supabase.from("job_applications").select("id, company, status, deadline, follow_up_date"),
       supabase.from("hackathons").select("id, hackathon_name, status, start_date, deadline, follow_up_date"),
       supabase.from("learning_tracks").select("id, title"),
-      supabase.from("track_items").select("track_id, title, status, target_date"),
+      supabase.from("track_items").select("id, track_id, title, status, target_date"),
     ]);
 
   if (!userRes.data.user) redirect("/login");
