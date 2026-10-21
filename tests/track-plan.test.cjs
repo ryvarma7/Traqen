@@ -6,6 +6,7 @@ const loadTs = createLoader();
 const {
   applyReschedule,
   buildPhaseProgress,
+  focusTrack,
   moveWithinOrder,
   nextDueItem,
   nextStepByTrack,
@@ -456,4 +457,71 @@ test("moving a step does not change the list it was given", () => {
 test("a lone step has nowhere to move", () => {
   assert.equal(moveWithinOrder(["a"], "a", "up"), null);
   assert.equal(moveWithinOrder(["a"], "a", "down"), null);
+});
+
+/* ── focusTrack ─────────────────────────────────────────────────────────── */
+
+function stepMap(entries) {
+  return new Map(
+    entries.map(([trackId, overrides]) => [
+      trackId,
+      makeItem({ id: `step-${trackId}`, track_id: trackId, ...overrides }),
+    ])
+  );
+}
+
+test("there is no focus track when nothing is in flight", () => {
+  assert.equal(focusTrack(new Map()), null);
+});
+
+test("an overdue step wins over a step that is due tomorrow", () => {
+  const focus = focusTrack(
+    stepMap([
+      ["track-late", { target_date: "2026-10-18" }],
+      ["track-soon", { target_date: "2026-10-22" }],
+    ])
+  );
+  assert.equal(focus.trackId, "track-late");
+});
+
+test("the soonest upcoming step wins when nothing is overdue", () => {
+  const focus = focusTrack(
+    stepMap([
+      ["track-later", { target_date: "2026-11-20" }],
+      ["track-sooner", { target_date: "2026-10-25" }],
+    ])
+  );
+  assert.equal(focus.trackId, "track-sooner");
+});
+
+test("a step with no date comes last", () => {
+  const focus = focusTrack(
+    stepMap([
+      ["track-undated", { target_date: null }],
+      ["track-dated", { target_date: "2026-12-01" }],
+    ])
+  );
+  assert.equal(focus.trackId, "track-dated");
+});
+
+test("the focus track is the only one when there is only one", () => {
+  const focus = focusTrack(stepMap([["track-1", { target_date: null }]]));
+  assert.equal(focus.trackId, "track-1");
+  assert.equal(focus.item.track_id, "track-1");
+});
+
+test("two tracks with the same date resolve the same way every time", () => {
+  const first = focusTrack(
+    stepMap([
+      ["track-b", { target_date: "2026-10-25" }],
+      ["track-a", { target_date: "2026-10-25" }],
+    ])
+  );
+  const second = focusTrack(
+    stepMap([
+      ["track-a", { target_date: "2026-10-25" }],
+      ["track-b", { target_date: "2026-10-25" }],
+    ])
+  );
+  assert.equal(first.trackId, second.trackId);
 });

@@ -17,7 +17,7 @@ export type ProgressPhase = Pick<TrackPhase, "id" | "track_id" | "position">;
 /** The fields a step needs to be ordered, dated and counted. */
 export type ProgressItem = Pick<
   TrackItem,
-  "id" | "track_id" | "phase_id" | "position" | "status" | "target_date"
+  "id" | "track_id" | "phase_id" | "position" | "status" | "target_date" | "title"
 >;
 
 export type PhaseState = "done" | "current" | "upcoming";
@@ -209,6 +209,37 @@ export function nextDueItem(
   const upcoming = dated.find((i) => diffDaysISO(today, i.target_date!) >= 0);
   const item = upcoming ?? dated[dated.length - 1];
   return { item, days: diffDaysISO(today, item.target_date!) };
+}
+
+/**
+ * The track the learner should pick up next.
+ *
+ * The most urgent one wins: a step that is already overdue beats a step
+ * that is due tomorrow, and a step with no date comes last because nothing
+ * is actually chasing it.
+ */
+export function focusTrack(
+  nextSteps: Map<string, ProgressItem>
+): { trackId: string; item: ProgressItem } | null {
+  let focus: { trackId: string; item: ProgressItem } | null = null;
+
+  for (const [trackId, item] of nextSteps) {
+    if (!focus) {
+      focus = { trackId, item };
+      continue;
+    }
+
+    const itemDate = item.target_date ?? "9999-12-31";
+    const focusDate = focus.item.target_date ?? "9999-12-31";
+    if (
+      itemDate < focusDate ||
+      (itemDate === focusDate && trackId < focus.trackId)
+    ) {
+      focus = { trackId, item };
+    }
+  }
+
+  return focus;
 }
 
 /**

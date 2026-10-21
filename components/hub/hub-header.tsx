@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Briefcase, ClipboardList, StickyNote } from "lucide-react";
+import { Briefcase, ClipboardList, GraduationCap, StickyNote } from "lucide-react";
 
 const QUICK_ACTIONS = [
   {
@@ -10,6 +10,7 @@ const QUICK_ACTIONS = [
   },
   { href: "/tasks?create=1", label: "New task", short: "Task", icon: ClipboardList },
   { href: "/notes?create=1", label: "New note", short: "Note", icon: StickyNote },
+  { href: "/tracks?create=1", label: "New track", short: "Track", icon: GraduationCap },
 ];
 
 /**

@@ -9,13 +9,18 @@ import { HubHeader } from "@/components/hub/hub-header";
 import { NameEntryGate } from "@/components/hub/name-entry-gate";
 import { NotesCarousel, type NotePreview } from "@/components/hub/notes-carousel";
 import { TasksPanel, type HubTask } from "@/components/hub/tasks-panel";
+import { TracksHero, type HubTrackFocus } from "@/components/hub/tracks-hero";
+import { TracksPanel, type HubTrackRow } from "@/components/hub/tracks-panel";
 import { PageTransition } from "@/components/shell/page-transition";
 import { PostLoginLoader } from "@/components/shell/post-login-loader";
 import { buildCalendarEvents, groupByDate } from "@/lib/calendar";
 import { daysUntil } from "@/lib/dates";
 import { priorityRank } from "@/lib/priority";
 import { createClient } from "@/lib/supabase/server";
-import { nextStepByTrack as nextStepByTrackFor } from "@/lib/track-plan";
+import {
+  focusTrack,
+  nextStepByTrack as nextStepByTrackFor,
+} from "@/lib/track-plan";
 import {
   ACTIVE_HACKATHON_STATUSES,
   ACTIVE_JOB_STATUSES,
@@ -92,7 +97,7 @@ export default async function HubPage({
       .order("updated_at", { ascending: false })
       .limit(24),
     supabase.from("learning_tracks").select("id, title, status"),
-    supabase.from("track_phases").select("id, track_id, position"),
+    supabase.from("track_phases").select("id, track_id, position, title"),
     supabase
       .from("track_items")
       .select("id, track_id, phase_id, title, status, target_date, position"),
@@ -120,6 +125,60 @@ export default async function HubPage({
   const trackPhases = trackPhasesRes.data ?? [];
   const trackItems = trackItemsRes.data ?? [];
   const trackTitles = new Map(tracks.map((t) => [t.id, t.title]));
+
+  // ── Tracks ───────────────────────────────────────────────────────────────
+  // The same derivation the track page uses, so the dashboard and the plan
+  // can never disagree about what "next" means.
+  const nextStepByTrack = nextStepByTrackFor(tracks, trackPhases, trackItems);
+  const focus = focusTrack(nextStepByTrack);
+  const phaseTitleById = new Map(trackPhases.map((p) => [p.id, p.title]));
+
+  const hubFocus: HubTrackFocus | null = focus
+    ? {
+        trackId: focus.trackId,
+        trackTitle: trackTitles.get(focus.trackId) ?? "Track",
+        phaseTitle: phaseTitleById.get(focus.item.phase_id) ?? null,
+        item: {
+          id: focus.item.id,
+          track_id: focus.item.track_id,
+          title: focus.item.title,
+          status: focus.item.status,
+          target_date: focus.item.target_date,
+          position: focus.item.position,
+        },
+      }
+    : null;
+
+  const doneByTrack = new Map<string, number>();
+  const totalByTrack = new Map<string, number>();
+  for (const item of trackItems) {
+    totalByTrack.set(item.track_id, (totalByTrack.get(item.track_id) ?? 0) + 1);
+    if (item.status === "Done") {
+      doneByTrack.set(item.track_id, (doneByTrack.get(item.track_id) ?? 0) + 1);
+    }
+  }
+
+  const hubTrackRows: HubTrackRow[] = tracks
+    .filter((track) => track.status === "In progress")
+    .map((track) => {
+      const next = nextStepByTrack.get(track.id);
+      return {
+        id: track.id,
+        title: track.title,
+        done: doneByTrack.get(track.id) ?? 0,
+        total: totalByTrack.get(track.id) ?? 0,
+        nextTitle: next?.title ?? null,
+        nextDate: next?.target_date ?? null,
+      };
+    })
+    .sort((a, b) => {
+      // Soonest first, so the list reads top-down as the order to pick them
+      // up in. Undated tracks sink to the bottom.
+      const ad = a.nextDate ?? "9999-12-31";
+      const bd = b.nextDate ?? "9999-12-31";
+      if (ad !== bd) return ad < bd ? -1 : 1;
+      return a.title.localeCompare(b.title);
+    });
 
   // ── Needs attention ──────────────────────────────────────────────────────
   // This is an action queue, not a second calendar. Only the next actionable
@@ -322,7 +381,6 @@ export default async function HubPage({
   // syllabus and buries a real deadline behind it. The step is derived by the
   // same rule the track page uses, so the hub and the track page can never
   // disagree about what "next" means.
-  const nextStepByTrack = nextStepByTrackFor(tracks, trackPhases, trackItems);
   for (const item of nextStepByTrack.values()) {
     const trackTitle = trackTitles.get(item.track_id) ?? "Track";
     if (item.target_date) {
@@ -432,6 +490,10 @@ export default async function HubPage({
 
         <AttentionStrip items={attention} />
 
+        {/* The one control on the dashboard: finish the step you are about
+            to do. The rest of the track surfaces are a briefing. */}
+        <TracksHero focus={hubFocus} />
+
         {/* `minmax(0,1fr)` is load-bearing: the default implicit `auto` column
             is floored at its items' min-content, and a `truncate` span is
             `white-space: nowrap`, so its min-content is the full unwrapped
@@ -444,6 +506,8 @@ export default async function HubPage({
           <TasksPanel tasks={openTasks} />
           <ApplicationsPanel jobs={hubJobs} hackathons={hubHackathons} />
         </div>
+
+        <TracksPanel tracks={hubTrackRows} />
 
         <CalendarTimeline eventsByDate={Object.fromEntries(groupByDate(events))} />
 
