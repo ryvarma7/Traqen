@@ -50,7 +50,7 @@ export function AuthCard({
         </div>
 
         <p className="mt-6 text-center text-2xs text-white/30">
-          Every application, hackathon and task — tracked in one place.
+          Every application, hackathon, task and course — tracked in one place.
         </p>
       </div>
     </div>

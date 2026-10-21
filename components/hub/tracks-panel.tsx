@@ -58,10 +58,10 @@ export function TracksPanel({ tracks }: { tracks: HubTrackRow[] }) {
             return (
               <li
                 key={row.id}
-                className="flex items-center gap-3 border-b border-white/[0.06] py-2.5 last:border-b-0"
+                className="flex items-start gap-3 border-b border-white/[0.06] py-2.5 last:border-b-0"
               >
                 <GraduationCap
-                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70"
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/70"
                   strokeWidth={1.75}
                 />
                 <div className="min-w-0 flex-1">
