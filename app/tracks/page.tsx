@@ -4,6 +4,7 @@ import { TracksView, type TrackSummary } from "@/components/tracks/tracks-view";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 240;
 
 export default async function TracksPage() {
   const supabase = await createClient();
@@ -13,7 +14,7 @@ export default async function TracksPage() {
     supabase.auth.getUser(),
     supabase
       .from("learning_tracks")
-      .select("id, title, description, start_date, status, created_at")
+       .select("id, title, description, start_date, end_date, status, created_at")
       .order("created_at", { ascending: false }),
     supabase.from("track_items").select("track_id, status"),
   ]);
@@ -36,6 +37,7 @@ export default async function TracksPage() {
     title: t.title,
     description: t.description,
     start_date: t.start_date,
+    end_date: t.end_date,
     status: t.status,
     created_at: t.created_at,
     total: totals.get(t.id)?.total ?? 0,

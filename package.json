@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test tests/performance.test.cjs tests/attention-strip.test.cjs",
+    "test": "node --test tests/performance.test.cjs tests/attention-strip.test.cjs tests/learning-plan-contract.test.cjs tests/nvidia.test.cjs",
+    "preview:plan": "node scripts/preview-learning-plan-request.cjs",
     "lint": "eslint ."
   },
   "dependencies": {

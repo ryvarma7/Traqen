@@ -84,6 +84,7 @@ export type LearningTrack = {
   title: string;
   description: string | null;
   start_date: string;
+  end_date: string | null;
   status: "In progress" | "Completed" | "On hold";
   created_at: string;
 };

@@ -289,8 +289,8 @@ create policy "Users manage own notes"
 
 -- ---------------------------------------------------------------------------
 -- Learning tracks (Course Tracker).
--- AI plans a course externally; the user pastes the JSON plan and Traqen
--- normalizes it into tracks → phases → items rows for visual tracking.
+-- Traqen generates a validated learning plan server-side and normalizes it
+-- into tracks → phases → items rows for visual tracking.
 -- ---------------------------------------------------------------------------
 create table if not exists public.learning_tracks (
   id uuid primary key default uuid_generate_v4(),
@@ -298,6 +298,7 @@ create table if not exists public.learning_tracks (
   title text not null,
   description text,
   start_date date not null,
+  end_date date,
   status text default 'In progress' check (status in ('In progress','Completed','On hold')),
   created_at timestamptz default now(),
   updated_at timestamptz default now()
@@ -351,6 +352,111 @@ create policy "Users manage own track items"
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
+-- Server-side learning-plan generation quota. Only SECURITY DEFINER RPCs can
+-- create or increment a usage row.
+create table if not exists public.learning_plan_usage (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  usage_date date not null,
+  used integer not null default 0 check (used >= 0 and used <= 5),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique (user_id, usage_date)
+);
+
+alter table public.learning_plan_usage enable row level security;
+drop policy if exists "Users can view own learning plan usage" on public.learning_plan_usage;
+create policy "Users can view own learning plan usage"
+  on public.learning_plan_usage for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+create or replace function public.consume_learning_plan_quota()
+returns table (
+  allowed boolean,
+  used integer,
+  remaining integer,
+  quota_limit integer,
+  reset_date date
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_today date := (now() at time zone 'UTC')::date;
+  v_limit constant integer := 5;
+  v_used integer;
+  v_allowed boolean := false;
+begin
+  if v_user_id is null then
+    return;
+  end if;
+
+  insert into public.learning_plan_usage (user_id, usage_date, used)
+  values (v_user_id, v_today, 1)
+  on conflict (user_id, usage_date) do nothing;
+
+  if found then
+    v_used := 1;
+    v_allowed := true;
+  else
+    select u.used
+      into v_used
+      from public.learning_plan_usage u
+     where u.user_id = v_user_id
+       and u.usage_date = v_today
+     for update;
+
+    if v_used < v_limit then
+      update public.learning_plan_usage
+         set used = v_used + 1,
+             updated_at = now()
+       where user_id = v_user_id
+         and usage_date = v_today;
+      v_used := v_used + 1;
+      v_allowed := true;
+    end if;
+  end if;
+
+  return query
+  select v_allowed,
+         v_used,
+         greatest(0, v_limit - v_used),
+         v_limit,
+         v_today + 1;
+end;
+$$;
+
+create or replace function public.get_learning_plan_quota()
+returns table (
+  used integer,
+  remaining integer,
+  quota_limit integer,
+  reset_date date
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(u.used, 0),
+         greatest(0, 5 - coalesce(u.used, 0)),
+         5,
+         ((now() at time zone 'UTC')::date + 1)
+    from (select auth.uid() as user_id) caller
+    left join public.learning_plan_usage u
+      on u.user_id = caller.user_id
+     and u.usage_date = (now() at time zone 'UTC')::date
+   where caller.user_id is not null;
+$$;
+
+grant execute on function public.consume_learning_plan_quota() to authenticated;
+revoke all on function public.consume_learning_plan_quota() from public, anon;
+grant execute on function public.get_learning_plan_quota() to authenticated;
+revoke all on function public.get_learning_plan_quota() from public, anon;
+
 -- Indexes. Every RLS policy filters on user_id, so the per-user indexes are on
 -- the hot path of literally every query the app makes -- without them Postgres
 -- seq-scans the table and then discards rows the policy rejects. The track_id /
@@ -366,6 +472,8 @@ create index if not exists idx_notes_user_updated_at on public.notes(user_id, up
 create index if not exists idx_track_phases_user_id on public.track_phases(user_id);
 create index if not exists idx_track_items_user_id on public.track_items(user_id);
 create index if not exists idx_track_items_phase_id on public.track_items(phase_id);
+create index if not exists idx_learning_plan_usage_user_id
+  on public.learning_plan_usage(user_id, usage_date desc);
 
 -- ---------------------------------------------------------------------------
 -- Table privileges. RLS decides WHICH rows are visible, but Postgres also
@@ -380,7 +488,7 @@ grant select (id, username, preferences) on public.profiles to authenticated;
 grant update (username, preferences) on public.profiles to authenticated;
 revoke all on public.dropdown_options, public.job_applications, public.hackathons,
   public.tasks, public.notes, public.learning_tracks, public.track_phases,
-  public.track_items from anon;
+  public.track_items, public.learning_plan_usage from anon;
 grant select, insert, update, delete on public.dropdown_options to authenticated;
 grant select, insert, update, delete on public.job_applications to authenticated;
 grant select, insert, update, delete on public.hackathons to authenticated;
@@ -389,3 +497,4 @@ grant select, insert, update, delete on public.notes to authenticated;
 grant select, insert, update, delete on public.learning_tracks to authenticated;
 grant select, insert, update, delete on public.track_phases to authenticated;
 grant select, insert, update, delete on public.track_items to authenticated;
+revoke all on public.learning_plan_usage from anon, authenticated;

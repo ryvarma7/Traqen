@@ -10,7 +10,10 @@ Framer Motion, and Supabase.
    `nvm install && nvm use`. On Windows, select that version with your Node manager.
 2. Run `npm ci` in the repository root. Keep `package-lock.json` checked in.
 3. Copy `.env.example` to `.env.local` and supply your own Supabase public URL,
-   publishable key, and site URL. Never commit `.env.local` or service-role keys.
+   publishable key, site URL, server-only learning-plan provider key, and the
+   exact provider model ID enabled for your account. `NVIDIA_API_KEY` and
+   `NVIDIA_MODEL` are server-only runtime variables: never prefix them with
+   `NEXT_PUBLIC_`, expose them to browser code, or commit `.env.local`.
 4. For a new Supabase project, run `supabase/schema.sql` in its SQL editor.
    Existing Traqen deployments run `supabase/schema-migrations.sql` once after
    the canonical schema. Do not choose between historical version files.
@@ -19,6 +22,57 @@ Framer Motion, and Supabase.
 
 For production locally, run `npm run build`, then `npm start`. The build downloads
 the Raleway font through `next/font/google` and therefore needs network access.
+
+### Learning-plan provider (NVIDIA NIM / Nemotron)
+
+The learning-plan generator calls the OpenAI-compatible NVIDIA NIM
+chat-completions endpoint (`https://integrate.api.nvidia.com/v1/chat/completions`)
+with the server-only `NVIDIA_API_KEY` and the model id in `NVIDIA_MODEL`
+(`nvidia/nemotron-3-ultra-550b-a55b` by default). Get a key from
+[build.nvidia.com/settings/api-keys](https://build.nvidia.com/settings/api-keys).
+
+- **The reasoning trace is on.** `chat_template_kwargs.enable_thinking` is
+  `true`: Nemotron 3 writes a reasoning trace first and returns it in its own
+  field (`reasoning_content`), so the answer in `content` stays clean JSON.
+  Reasoning tokens are billed against `max_tokens`, so the output budget is
+  16,384 tokens. Set `NVIDIA_THINKING=off` to trade the reasoning for a
+  faster, smaller answer.
+- **Reasoning effort is tunable.** `chat_template_kwargs.medium_effort` and
+  `low_effort` ask for fewer reasoning tokens; `NVIDIA_THINKING_EFFORT` sets
+  it to `full` (default), `medium` or `low`.
+- **Do not send `force_nonempty_content`.** It stops the model returning an
+  empty answer when the reasoning phase used up the budget, but it also makes
+  the model fold the reasoning into the answer, which in JSON mode shows up as
+  a stray `"thinking"` key next to the plan.
+- **Sampling follows NVIDIA's guidance** for the Nemotron 3 family:
+  `temperature: 1.0`, `top_p: 0.95`.
+- **JSON mode** (`response_format: {"type": "json_object"}`) keeps the answer
+  parseable. If a deployment rejects guided decoding or the optional chat
+  template flags, the client detects the rejection and retries with a simpler
+  payload instead of failing.
+- **The contract travels in the system message** (curriculum rules, schedule
+  context, schema and a format example), while the user's own text travels in
+  the user message as untrusted plain text.
+- **The compact retry** re-asks with a shorter contract and the reasoning
+  trace off, for the case where the first answer was truncated, missed the
+  contract, or ran long. The two attempts share the 240 seconds the Tracks
+  action is allowed: 180 s for the first attempt, 50 s for the retry.
+- `NVIDIA_BASE_URL` is optional and overrides the API origin, for example
+  `http://localhost:8000/v1` for a self-hosted NIM.
+
+To see the exact request that goes over the wire (system message, user message
+and the full JSON body) with test data, without a key or a network call:
+
+```sh
+npm run preview:plan
+```
+
+To check the prompt against the live API and see how often the answer passes
+the contract:
+
+```sh
+node scripts/smoke-plan-repeat.cjs 3
+```
 
 ## Checks
 
@@ -57,9 +111,13 @@ before/after results, and limitations.
 
 Import the GitHub repository as a Next.js project. Set the three public variables
 from `.env.example`, set `NEXT_PUBLIC_SITE_URL` to the deployment's HTTPS origin,
-and add that origin's `/auth/callback` URL to Supabase's redirect allowlist. Build
-with `npm run build`. Use the pinned Node version if supported by your host;
+and add that origin's `/auth/callback` URL to Supabase's redirect allowlist. Also
+set `NVIDIA_API_KEY` and `NVIDIA_MODEL` as private runtime environment variables
+in Vercel; do not add either one to a `NEXT_PUBLIC_*` variable. Build with
+`npm run build`. Use the pinned Node version if supported by your host;
 otherwise verify the host's supported runtime with the checks above before release.
+Learning-plan generation allows up to 240 seconds for the Tracks page action;
+confirm your Vercel plan supports that function duration.
 
 ### Docker / clean Linux
 
@@ -74,6 +132,9 @@ docker build -t traqen \
   --build-arg NEXT_PUBLIC_SITE_URL="$NEXT_PUBLIC_SITE_URL" .
 docker run --rm -p 3000:3000 --env-file .env.local traqen
 ```
+
+The private provider variables are read only at runtime by the server action;
+they are not Docker build arguments and are never embedded in the browser bundle.
 
 The Docker build installs dependencies, runs the offline regressions, builds the
 app, and removes development dependencies. The runtime runs as a non-root user.

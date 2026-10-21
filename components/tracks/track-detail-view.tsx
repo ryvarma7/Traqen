@@ -19,7 +19,7 @@ import {
   setTrackItemStatus,
   setTrackStatus,
 } from "@/lib/actions/tracks";
-import { relativeDays } from "@/lib/dates";
+import { formatShortDate, relativeDays } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
 import { useIsMobile } from "@/lib/hooks";
 import { buildPhaseProgress, nextDueItem, paceOf, upNextItem } from "@/lib/track-plan";
@@ -393,6 +393,14 @@ function Header({
           </span>
         </p>
       )}
+
+      <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="shrink-0">Plan window</span>
+        <span className="font-mono tabular-nums text-foreground/90">
+          {formatShortDate(track.start_date)}
+          {track.end_date ? ` – ${formatShortDate(track.end_date)}` : ""}
+        </span>
+      </p>
 
       {track.status === "On hold" && (
         <p className="mt-3 inline-flex items-center gap-1.5 rounded-field border border-white/15 bg-white/5 px-2.5 py-1 text-xs text-muted-foreground">

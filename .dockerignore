@@ -5,7 +5,6 @@ node_modules
 !.env.example
 .agents
 .claude
-.acl-recovery
 agent
 *.tsbuildinfo
 *.log

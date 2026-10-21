@@ -18,7 +18,7 @@ export default async function TrackDetailPage({
     supabase.auth.getUser(),
     supabase
       .from("learning_tracks")
-      .select("id, title, description, start_date, status, created_at")
+       .select("id, title, description, start_date, end_date, status, created_at")
       .eq("id", id)
       .maybeSingle(),
     supabase

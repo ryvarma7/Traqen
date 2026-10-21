@@ -4,10 +4,59 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { addDaysISO, diffDaysISO, isValidDateOnly } from "@/lib/dates";
 import { safeActionError } from "@/lib/action-errors";
+import { NvidiaRequestError, generateNvidiaText } from "@/lib/nvidia";
 import { createClient } from "@/lib/supabase/server";
-import { resolveOffset, trackSchema, type ParsedTrack } from "@/lib/tracks/contract";
+import {
+  buildLearningPlanMessages,
+  learningPlanInputSchema,
+  parseGeneratedTrack,
+  resolveOffset,
+  trackSchema,
+  type LearningPlanInput,
+  type ParsedTrack,
+} from "@/lib/tracks/contract";
 
-type ActionResult = { error?: string };
+const DAILY_LEARNING_PLAN_LIMIT = 5;
+
+// The Tracks page allows 240 seconds of server action time. The full attempt
+// gets most of it, and the compact retry keeps enough left to still return a
+// plan when the first answer was truncated, missed the contract, or ran long.
+// The hosted endpoint generates roughly 40 to 55 tokens a second for this
+// model, and a reasoned plan lands between 150 and 180 seconds, so the
+// budgets are sized for the answer length rather than for the request.
+const REASONED_TIMEOUT_MS = 180_000;
+const COMPACT_RETRY_TIMEOUT_MS = 50_000;
+
+export type LearningPlanErrorCode =
+  | "UNAUTHENTICATED"
+  | "INVALID_INPUT"
+  | "QUOTA_UNAVAILABLE"
+  | "QUOTA_SETUP_REQUIRED"
+  | "QUOTA_EXCEEDED"
+  | "GENERATION_NOT_CONFIGURED"
+  | "GENERATION_TIMEOUT"
+  | "GENERATION_INCOMPLETE"
+  | "GENERATION_UNAVAILABLE"
+  | "INVALID_PLAN";
+
+export type GenerateLearningPlanResult = {
+  track?: ParsedTrack;
+  remaining?: number;
+  resetDate?: string;
+  error?: string;
+  code?: LearningPlanErrorCode;
+};
+
+export type LearningPlanQuotaResult = {
+  used?: number;
+  remaining?: number;
+  limit?: number;
+  resetDate?: string;
+  error?: string;
+  code?: LearningPlanErrorCode;
+};
+
+type ActionResult = { error?: string; code?: LearningPlanErrorCode };
 
 const idSchema = z.string().uuid();
 const statusSchema = z.enum(["To do", "In progress", "Done"]);
@@ -16,7 +65,8 @@ const statusSchema = z.enum(["To do", "In progress", "Done"]);
  *  track_items rows. Offsets are resolved against the chosen start date. */
 export async function importTrack(
   track: ParsedTrack,
-  startDate: string
+  startDate: string,
+  endDate?: string | null
 ): Promise<ActionResult & { trackId?: string }> {
   const supabase = await createClient();
   const {
@@ -35,6 +85,33 @@ export async function importTrack(
   }
   track = parsedTrack.data;
 
+  if (endDate !== undefined && endDate !== null && !isValidDateOnly(endDate)) {
+    return { error: "Pick a valid end date." };
+  }
+  if (endDate && endDate < startDate) {
+    return { error: "End date must be on or after the start date." };
+  }
+
+  // Re-check every persisted date on the server. This prevents a forged track
+  // from writing dates outside the selected range, even if the UI validated it.
+  for (const phase of track.phases) {
+    for (const item of phase.items) {
+      if (item.absolute_date && item.offset_days !== null && item.offset_days !== undefined) {
+        return { error: "The track contains conflicting step dates." };
+      }
+
+      const targetDate = item.absolute_date
+        ? item.absolute_date
+        : item.offset_days !== null && item.offset_days !== undefined
+          ? resolveOffset(startDate, item.offset_days)
+          : null;
+      if (!targetDate) continue;
+      if (targetDate < startDate || (endDate && targetDate > endDate)) {
+        return { error: "The track contains a step outside the selected date range." };
+      }
+    }
+  }
+
   const { data: inserted, error: trackError } = await supabase
     .from("learning_tracks")
     .insert({
@@ -42,6 +119,7 @@ export async function importTrack(
       title: track.track_title,
       description: track.description || null,
       start_date: startDate,
+      end_date: endDate || null,
       status: "In progress",
     })
     .select("id")
@@ -66,7 +144,11 @@ export async function importTrack(
       .select("id")
       .single();
     if (phaseError || !phaseRow) {
-      await supabase.from("learning_tracks").delete().eq("id", trackId);
+      await supabase
+        .from("learning_tracks")
+        .delete()
+        .eq("id", trackId)
+        .eq("user_id", user.id);
       return { error: safeActionError(phaseError, "Could not create a phase.") };
     }
 
@@ -89,7 +171,11 @@ export async function importTrack(
 
     const { error: itemsError } = await supabase.from("track_items").insert(rows);
     if (itemsError) {
-      await supabase.from("learning_tracks").delete().eq("id", trackId);
+      await supabase
+        .from("learning_tracks")
+        .delete()
+        .eq("id", trackId)
+        .eq("user_id", user.id);
       return { error: safeActionError(itemsError, "Could not create the track steps.") };
     }
   }
@@ -98,6 +184,237 @@ export async function importTrack(
   revalidatePath("/tracks");
   revalidatePath(`/tracks/${trackId}`);
   return { trackId };
+}
+
+const quotaDateSchema = z.string().refine(isValidDateOnly);
+const quotaSchema = z.object({
+  used: z.number().int().min(0).max(DAILY_LEARNING_PLAN_LIMIT),
+  remaining: z.number().int().min(0).max(DAILY_LEARNING_PLAN_LIMIT),
+  quota_limit: z.literal(DAILY_LEARNING_PLAN_LIMIT),
+  reset_date: quotaDateSchema,
+});
+const consumedQuotaSchema = quotaSchema.extend({ allowed: z.boolean() });
+
+type Quota = {
+  used: number;
+  remaining: number;
+  limit: number;
+  resetDate: string;
+};
+
+type QuotaReadFailure = "unavailable" | "setup_required";
+
+function rpcRow(data: unknown): unknown {
+  return Array.isArray(data) ? data[0] : data;
+}
+
+async function consumeLearningPlanQuota(supabase: Awaited<ReturnType<typeof createClient>>): Promise<
+  (Quota & { allowed: boolean }) | QuotaReadFailure
+> {
+  const { data, error } = await supabase.rpc("consume_learning_plan_quota");
+  if (error) return error.code === "PGRST202" ? "setup_required" : "unavailable";
+
+  const parsed = consumedQuotaSchema.safeParse(rpcRow(data));
+  if (!parsed.success) return "unavailable";
+
+  return {
+    allowed: parsed.data.allowed,
+    used: parsed.data.used,
+    remaining: parsed.data.remaining,
+    limit: parsed.data.quota_limit,
+    resetDate: parsed.data.reset_date,
+  };
+}
+
+async function readLearningPlanQuota(
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<Quota | QuotaReadFailure> {
+  const { data, error } = await supabase.rpc("get_learning_plan_quota");
+  if (error) return error.code === "PGRST202" ? "setup_required" : "unavailable";
+
+  const parsed = quotaSchema.safeParse(rpcRow(data));
+  if (!parsed.success) return "unavailable";
+
+  return {
+    used: parsed.data.used,
+    remaining: parsed.data.remaining,
+    limit: parsed.data.quota_limit,
+    resetDate: parsed.data.reset_date,
+  };
+}
+
+/** Generates a validated learning plan without persisting it. */
+export async function generateLearningPlan(
+  input: LearningPlanInput
+): Promise<GenerateLearningPlanResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Not signed in.", code: "UNAUTHENTICATED" };
+  }
+
+  const parsedInput = learningPlanInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    return {
+      error: "Enter a topic and a valid start date. The end date is optional.",
+      code: "INVALID_INPUT",
+    };
+  }
+
+  // The RPC owns the row lock and UTC-day boundary. Never implement this
+  // check as a read followed by a client-side insert/update.
+  const quota = await consumeLearningPlanQuota(supabase);
+  if (quota === "setup_required") {
+    return {
+      error: "Learning-plan quota setup is incomplete.",
+      code: "QUOTA_SETUP_REQUIRED",
+    };
+  }
+  if (quota === "unavailable") {
+    return {
+      error: "Could not check the daily generation limit.",
+      code: "QUOTA_UNAVAILABLE",
+    };
+  }
+  if (!quota.allowed) {
+    return {
+      remaining: quota.remaining,
+      resetDate: quota.resetDate,
+      error: "Daily generation limit reached. Try again tomorrow.",
+      code: "QUOTA_EXCEEDED",
+    };
+  }
+
+  try {
+    // A model can stop after producing valid-looking prose or partial JSON,
+    // especially when the configured model has a smaller effective output
+    // budget. Retry once with a deliberately compact contract before showing
+    // an error to the user. Provider failures are not retried here because
+    // generateNvidiaText already handles transient HTTP retries.
+    for (const compact of [false, true]) {
+      try {
+        const { system, user } = buildLearningPlanMessages(parsedInput.data, {
+          compact,
+        });
+        // The first attempt lets the model reason before it answers, so it
+        // designs the curriculum properly. The compact retry turns the
+        // reasoning off: it exists precisely because the first attempt ran
+        // out of budget or missed the contract, and a lean request is far
+        // more likely to land inside the time left.
+        //
+        // The two timeouts add up to the 240 seconds the Tracks action is
+        // allowed to run for: the first attempt gets the time it needs, and
+        // the compact retry still has room to produce a plan.
+        const raw = await generateNvidiaText(user, {
+          system,
+          thinking: compact ? false : undefined,
+          timeoutMs: compact ? COMPACT_RETRY_TIMEOUT_MS : REASONED_TIMEOUT_MS,
+        });
+        const parsedTrack = parseGeneratedTrack(raw, parsedInput.data);
+        if (parsedTrack.ok) {
+          return {
+            track: parsedTrack.track,
+            remaining: quota.remaining,
+            resetDate: quota.resetDate,
+          };
+        }
+
+        console.warn("NVIDIA NIM learning plan did not match the contract", {
+          attempt: compact ? 2 : 1,
+          reason: parsedTrack.error,
+          responseLength: raw.length,
+        });
+      } catch (error) {
+        if (
+          error instanceof NvidiaRequestError &&
+          !compact &&
+          (error.code === "incomplete" || error.code === "timeout")
+        ) {
+          console.warn(
+            error.code === "timeout"
+              ? "NVIDIA NIM learning plan timed out; retrying compact output"
+              : "NVIDIA NIM learning plan was truncated; retrying compact output",
+            {
+              attempt: 1,
+              status: error.status,
+            }
+          );
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    return {
+      remaining: quota.remaining,
+      resetDate: quota.resetDate,
+      error: "The generated learning plan could not be validated.",
+      code: "INVALID_PLAN",
+    };
+  } catch (error) {
+    if (error instanceof NvidiaRequestError) {
+      if (error.code === "configuration") {
+        return {
+          remaining: quota.remaining,
+          resetDate: quota.resetDate,
+          error: "Learning-plan generation is not available yet.",
+          code: "GENERATION_NOT_CONFIGURED",
+        };
+      }
+      if (error.code === "timeout") {
+        return {
+          remaining: quota.remaining,
+          resetDate: quota.resetDate,
+          error: "Learning-plan generation timed out. Try again.",
+          code: "GENERATION_TIMEOUT",
+        };
+      }
+      if (error.code === "incomplete") {
+        return {
+          remaining: quota.remaining,
+          resetDate: quota.resetDate,
+          error: "The AI planner returned an incomplete response. Try again.",
+          code: "GENERATION_INCOMPLETE",
+        };
+      }
+    }
+
+    return {
+      remaining: quota.remaining,
+      resetDate: quota.resetDate,
+      error: "Learning-plan generation is temporarily unavailable.",
+      code: "GENERATION_UNAVAILABLE",
+    };
+  }
+}
+
+/** Returns the authenticated user's current UTC-day generation quota. */
+export async function getLearningPlanQuota(): Promise<LearningPlanQuotaResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Not signed in.", code: "UNAUTHENTICATED" };
+  }
+
+  const quota = await readLearningPlanQuota(supabase);
+  if (quota === "setup_required") {
+    return {
+      error: "Learning-plan quota setup is incomplete.",
+      code: "QUOTA_SETUP_REQUIRED",
+    };
+  }
+  if (quota === "unavailable") {
+    return {
+      error: "Could not load the daily generation limit.",
+      code: "QUOTA_UNAVAILABLE",
+    };
+  }
+
+  return quota;
 }
 
 /** Flips an item's status and keeps the parent track's status in sync:

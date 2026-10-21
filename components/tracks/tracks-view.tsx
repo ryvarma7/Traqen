@@ -20,6 +20,7 @@ export type TrackSummary = {
   title: string;
   description: string | null;
   start_date: string;
+  end_date: string | null;
   /** Track-level status — a distinct three-state field from the items'
    *  two-state done/not-done, and still surfaced as the card pill. */
   status: "In progress" | "Completed" | "On hold";
@@ -63,8 +64,8 @@ export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
           </span>
           <p className="text-sm font-medium text-foreground">No tracks yet</p>
           <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
-            Plan a course with any AI, paste its JSON plan here, and Traqen
-            turns it into a visual roadmap you can check off step by step.
+            Create a focused learning plan with Traqen&apos;s in-app AI planner,
+            then follow your visual roadmap step by step.
           </p>
           <motion.button
             whileTap={reduceMotion ? undefined : { scale: 0.97 }}
@@ -72,7 +73,7 @@ export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
             onClick={() => setImportOpen(true)}
             className="mt-5 glass-btn-base glass-btn-primary h-10 gap-2 rounded-field px-4 text-sm"
           >
-            <Plus className="h-4 w-4" /> Import a track
+            <Plus className="h-4 w-4" /> Create a learning plan
           </motion.button>
         </div>
       ) : (
@@ -145,7 +146,8 @@ export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
                       <div className="mt-3 flex items-center justify-between">
                         <span className="flex items-center gap-1.5 font-mono text-2xs tabular-nums text-muted-foreground">
                           <CalendarDays className="h-3 w-3" />
-                          {formatShortDate(track.start_date)}
+                           {formatShortDate(track.start_date)}
+                           {track.end_date && ` – ${formatShortDate(track.end_date)}`}
                         </span>
                         <button
                           type="button"
@@ -168,8 +170,8 @@ export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
         </motion.div>
       )}
 
-      {/* Floating import button */}
-      <FabPlus label="Import track" onClick={() => setImportOpen(true)} />
+      {/* Floating create button */}
+      <FabPlus label="Create learning plan" onClick={() => setImportOpen(true)} />
 
       <ImportTrackModal open={importOpen} onClose={() => setImportOpen(false)} />
     </div>
