@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Traqen",
     short_name: "Traqen",
     description:
-      "Track job applications, hackathons, tasks, and notes in one place.",
+      "Track job applications, hackathons, tasks, notes and learning plans in one place.",
     start_url: "/",
     display: "standalone",
     background_color: "#000000",

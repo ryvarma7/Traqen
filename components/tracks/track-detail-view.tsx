@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { useMotionPreferences } from "@/components/shared/motion-provider";
 import { ConfirmDialog } from "@/components/tracks/confirm-dialog";
 import { beginNav } from "@/components/shell/nav-loader";
-import { PhaseAccordion, PhaseRail, PhaseTasks } from "@/components/tracks/phase-list";
+import { PhaseAccordion, PhaseTasks } from "@/components/tracks/phase-list";
 import { PhaseSheet } from "@/components/tracks/phase-sheet";
 import { RescheduleSheet } from "@/components/tracks/reschedule-sheet";
 import { StepSheet } from "@/components/tracks/step-sheet";
@@ -310,30 +310,30 @@ function TrackDetail({
 
       <TrackPhaseStepper progress={progress} selectedId={selectedId} onSelect={focusPhase} />
 
-      {/* ── Desktop: sticky phase rail + the plan ────────────────────────── */}
-      <div className="grid gap-6 md:grid-cols-[260px_minmax(0,1fr)] md:gap-7">
-        {!isMobile && <PhaseRail progress={progress} selectedId={selectedId} onSelect={focusPhase} />}
+      {/* ── Desktop: the plan, full width ───────────────────────────────────
+          The stepper above is the only list of phases on this layout. There
+          used to be a sticky rail beside the plan listing the same phases,
+          which meant two navigators for one list and a plan squeezed into
+          the leftover width. */}
+      <div className="min-w-0 space-y-5">
+        <UpNextCard
+          item={next}
+          phase={nextPhase?.phase ?? null}
+          totalItems={total}
+          busy={next ? busyIds.has(next.id) : false}
+          onMarkDone={toggleItem}
+        />
 
-        <div className="min-w-0 space-y-5">
-          <UpNextCard
-            item={next}
-            phase={nextPhase?.phase ?? null}
-            totalItems={total}
-            busy={next ? busyIds.has(next.id) : false}
-            onMarkDone={toggleItem}
+        {!isMobile && <div className="hidden md:block">
+          <PhaseTasks
+            progress={progress.find((p) => p.phase.id === selectedId)}
+            busyIds={busyIds}
+            onItemToggle={toggleItem}
+            onItemEdit={editStep}
+            onAddStep={addStep}
+            onEditPhase={editPhase}
           />
-
-          {!isMobile && <div className="hidden md:block">
-            <PhaseTasks
-              progress={progress.find((p) => p.phase.id === selectedId)}
-              busyIds={busyIds}
-              onItemToggle={toggleItem}
-              onItemEdit={editStep}
-              onAddStep={addStep}
-              onEditPhase={editPhase}
-            />
-          </div>}
-        </div>
+        </div>}
       </div>
 
       {/* ── Mobile: the same plan, one phase at a time ───────────────────── */}

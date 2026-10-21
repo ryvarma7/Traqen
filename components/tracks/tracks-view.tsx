@@ -2,50 +2,59 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
-import { CalendarDays, GraduationCap, Plus, Trash2 } from "lucide-react";
-import Link from "next/link";
+import { GraduationCap, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { ImportTrackModal } from "@/components/tracks/import-track-modal";
 import { FabPlus } from "@/components/shared/fab-plus";
 import { useMotionPreferences } from "@/components/shared/motion-provider";
+import { TrackCard, type TrackCardData } from "@/components/tracks/track-card";
 import { deleteTrack } from "@/lib/actions/tracks";
 import { useCreateShortcut, usePendingCreate } from "@/lib/create-bus";
-import { formatShortDate } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
-import { blurIn, itemVariants, listVariants } from "@/lib/motion";
+import { listVariants } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
-export type TrackSummary = {
-  id: string;
-  title: string;
-  description: string | null;
-  start_date: string;
-  end_date: string | null;
-  /** Track-level status — a distinct three-state field from the items'
-   *  two-state done/not-done, and still surfaced as the card pill. */
-  status: "In progress" | "Completed" | "On hold";
-  total: number;
-  done: number;
+export type TrackSummary = TrackCardData & {
   created_at: string;
 };
 
-const STATUS_TONES: Record<TrackSummary["status"], string> = {
-  "In progress": "bg-info-soft/80 text-info border-info-border/70",
-  Completed: "bg-success-soft/80 text-success border-success-border/70",
-  "On hold": "bg-white/5 text-muted-foreground border-white/15",
-};
+/** Which tracks the list shows. */
+type FilterKey = "all" | "active" | "done";
+
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: "active", label: "Active" },
+  { key: "done", label: "Done" },
+  { key: "all", label: "All" },
+];
+
+/** How the tracks are ordered. */
+type SortKey = "next" | "recent" | "progress";
+
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: "next", label: "Next up" },
+  { key: "recent", label: "Recent" },
+  { key: "progress", label: "Progress" },
+];
 
 export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
   const reduceMotion = useMotionPreferences();
   const [importOpen, setImportOpen] = React.useState(false);
+  const [filter, setFilter] = React.useState<FilterKey>("active");
+  const [sort, setSort] = React.useState<SortKey>("next");
 
   // The mobile tab bar's "+" and the hub's quick-action pill both land here.
   useCreateShortcut(() => setImportOpen(true));
   usePendingCreate(() => setImportOpen(true));
 
-  const remove = async (id: string, title: string) => {
-    if (!window.confirm(`Delete "${title}" and all its steps? This can't be undone.`)) return;
-    const result = await deleteTrack(id);
+  const remove = async (track: TrackCardData) => {
+    if (
+      !window.confirm(
+        `Delete "${track.title}" and all its steps? This can't be undone.`
+      )
+    ) {
+      return;
+    }
+    const result = await deleteTrack(track.id);
     if (result.error) {
       haptics.error();
       toast.error(result.error);
@@ -55,9 +64,35 @@ export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
     }
   };
 
-  return (
-    <div className="relative pb-24 md:pb-28">
-      {tracks.length === 0 ? (
+  const visible = React.useMemo(() => {
+    const filtered = tracks.filter((track) => {
+      if (filter === "active") return track.status === "In progress";
+      if (filter === "done") return track.status === "Completed";
+      return true;
+    });
+
+    return filtered.sort((a, b) => {
+      if (sort === "next") {
+        // Soonest first. An undated step is not chasing anything, so it
+        // sinks to the bottom rather than to the top.
+        const ad = a.nextDate ?? "9999-12-31";
+        const bd = b.nextDate ?? "9999-12-31";
+        if (ad !== bd) return ad < bd ? -1 : 1;
+        return a.title.localeCompare(b.title);
+      }
+      if (sort === "progress") {
+        const ap = a.total > 0 ? a.done / a.total : 0;
+        const bp = b.total > 0 ? b.done / b.total : 0;
+        if (ap !== bp) return bp - ap;
+        return a.title.localeCompare(b.title);
+      }
+      return b.created_at.localeCompare(a.created_at);
+    });
+  }, [tracks, filter, sort]);
+
+  if (tracks.length === 0) {
+    return (
+      <div className="relative pb-24 md:pb-28">
         <div className="flex flex-col items-center rounded-card glass-section border-dashed px-6 py-16 text-center">
           <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-card bg-white/6 border border-white/12">
             <GraduationCap className="h-5 w-5 text-muted-foreground" />
@@ -76,6 +111,75 @@ export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
             <Plus className="h-4 w-4" /> Create a learning plan
           </motion.button>
         </div>
+
+        <FabPlus label="Create learning plan" onClick={() => setImportOpen(true)} />
+        <ImportTrackModal open={importOpen} onClose={() => setImportOpen(false)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative pb-24 md:pb-28">
+      {/* Filter and sort. The list has no table headers to click, so the
+          controls sit above the grid. */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div
+          className="relative inline-flex rounded-field border border-border bg-muted/60 p-1"
+          role="group"
+          aria-label="Filter tracks"
+        >
+          {FILTERS.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => {
+                haptics.selection();
+                setFilter(option.key);
+              }}
+              aria-pressed={filter === option.key}
+              className={cn(
+                "focus-ring rounded-[7px] px-3 py-1.5 text-xs font-medium transition-colors",
+                filter === option.key
+                  ? "border border-white/10 bg-white/[0.06] text-foreground"
+                  : "border border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        <div
+          className="relative inline-flex rounded-field border border-border bg-muted/60 p-1"
+          role="group"
+          aria-label="Sort tracks"
+        >
+          {SORTS.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => {
+                haptics.selection();
+                setSort(option.key);
+              }}
+              aria-pressed={sort === option.key}
+              className={cn(
+                "focus-ring rounded-[7px] px-3 py-1.5 text-xs font-medium transition-colors",
+                sort === option.key
+                  ? "border border-white/10 bg-white/[0.06] text-foreground"
+                  : "border border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {visible.length === 0 ? (
+        <p className="rounded-card glass-section px-6 py-14 text-center text-sm text-muted-foreground/70">
+          No tracks in this view.
+        </p>
       ) : (
         <motion.div
           variants={reduceMotion ? undefined : listVariants}
@@ -83,90 +187,14 @@ export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
           animate={reduceMotion ? undefined : "visible"}
           className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
         >
-          {tracks.map((track, index) => {
-            const pct = track.total > 0 ? Math.round((track.done / track.total) * 100) : 0;
-            return (
-              <motion.div
-                key={track.id}
-                custom={index}
-                variants={reduceMotion ? undefined : itemVariants}
-                initial={reduceMotion ? false : undefined}
-                animate={reduceMotion ? blurIn.animate : undefined}
-                transition={reduceMotion ? { duration: 0 } : undefined}
-                layout={reduceMotion ? false : "position"}
-                className="h-full"
-              >
-                <motion.div
-                  whileTap={reduceMotion ? undefined : { scale: 0.985 }}
-                  className="group relative h-full"
-                >
-                  <Link
-                    href={`/tracks/${track.id}`}
-                    className="flex h-full flex-col rounded-card glass-tile glass-tile-hover p-5"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <h2 className="min-w-0 flex-1 break-words text-sm font-semibold leading-snug text-foreground">
-                        {track.title}
-                      </h2>
-                      <span
-                        className={cn(
-                          "shrink-0 rounded-full border px-2.5 py-0.5 text-2xs font-medium",
-                          STATUS_TONES[track.status]
-                        )}
-                      >
-                        {track.status}
-                      </span>
-                    </div>
-
-                    {track.description && (
-                      <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                        {track.description}
-                      </p>
-                    )}
-
-                    <div className="mt-auto pt-4">
-                      {/* Progress bar — white on black, animated fill */}
-                      <div className="flex items-baseline justify-between">
-                        <span className="font-mono text-2xs tabular-nums text-muted-foreground">
-                          {track.done}/{track.total} steps
-                        </span>
-                        <span className="font-mono text-xs font-semibold tabular-nums text-foreground">
-                          {pct}%
-                        </span>
-                      </div>
-                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/8">
-                        <motion.div
-                          initial={reduceMotion ? false : { scaleX: 0 }}
-                          animate={{ scaleX: pct / 100 }}
-                          transition={reduceMotion ? { duration: 0 } : { duration: 0.7, ease: "easeOut", delay: 0.15 }}
-                          className="h-full w-full origin-left rounded-full bg-white"
-                        />
-                      </div>
-
-                      <div className="mt-3 flex items-center justify-between">
-                        <span className="flex items-center gap-1.5 font-mono text-2xs tabular-nums text-muted-foreground">
-                          <CalendarDays className="h-3 w-3" />
-                           {formatShortDate(track.start_date)}
-                           {track.end_date && ` – ${formatShortDate(track.end_date)}`}
-                        </span>
-                        <button
-                          type="button"
-                          aria-label="Delete track"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            remove(track.id, track.title);
-                          }}
-                          className="rounded-field p-1.5 text-muted-foreground/0 transition-colors hover:bg-danger-soft/60 hover:text-danger group-hover:text-muted-foreground"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </Link>
-                </motion.div>
-              </motion.div>
-            );
-          })}
+          {visible.map((track, index) => (
+            <TrackCard
+              key={track.id}
+              track={track}
+              index={index}
+              onDelete={(card) => void remove(card)}
+            />
+          ))}
         </motion.div>
       )}
 

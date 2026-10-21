@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { PageTransition } from "@/components/shell/page-transition";
 import { TracksView, type TrackSummary } from "@/components/tracks/tracks-view";
 import { createClient } from "@/lib/supabase/server";
+import { nextStepByTrack } from "@/lib/track-plan";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 240;
@@ -10,13 +11,16 @@ export default async function TracksPage() {
   const supabase = await createClient();
 
   // Auth check in parallel with the reads; RLS scopes rows to auth.uid().
-  const [userRes, tracksRes, itemsRes] = await Promise.all([
+  const [userRes, tracksRes, phasesRes, itemsRes] = await Promise.all([
     supabase.auth.getUser(),
     supabase
       .from("learning_tracks")
-       .select("id, title, description, start_date, end_date, status, created_at")
+      .select("id, title, description, start_date, end_date, status, created_at")
       .order("created_at", { ascending: false }),
-    supabase.from("track_items").select("track_id, status"),
+    supabase.from("track_phases").select("id, track_id, position, title"),
+    supabase
+      .from("track_items")
+      .select("id, track_id, phase_id, title, status, target_date, position"),
   ]);
 
   if (!userRes.data.user) redirect("/login");
@@ -32,17 +36,30 @@ export default async function TracksPage() {
     totals.set(item.track_id, agg);
   }
 
-  const tracks: TrackSummary[] = (tracksRes.data ?? []).map((t) => ({
-    id: t.id,
-    title: t.title,
-    description: t.description,
-    start_date: t.start_date,
-    end_date: t.end_date,
-    status: t.status,
-    created_at: t.created_at,
-    total: totals.get(t.id)?.total ?? 0,
-    done: totals.get(t.id)?.done ?? 0,
-  }));
+  // The same derivation the track page uses, so a card and the plan it
+  // opens can never disagree about what comes next.
+  const nextSteps = nextStepByTrack(
+    tracksRes.data ?? [],
+    phasesRes.data ?? [],
+    itemsRes.data ?? []
+  );
+
+  const tracks: TrackSummary[] = (tracksRes.data ?? []).map((t) => {
+    const next = nextSteps.get(t.id);
+    return {
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      start_date: t.start_date,
+      end_date: t.end_date,
+      status: t.status,
+      created_at: t.created_at,
+      total: totals.get(t.id)?.total ?? 0,
+      done: totals.get(t.id)?.done ?? 0,
+      nextTitle: next?.title ?? null,
+      nextDate: next?.target_date ?? null,
+    };
+  });
 
   return (
     <>

@@ -14,7 +14,8 @@ const raleway = Raleway({
 
 export const metadata: Metadata = {
   title: "Traqen",
-  description: "Track job applications, hackathons, tasks, and notes in one place.",
+  description:
+    "Track job applications, hackathons, tasks, notes and learning plans in one place.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
