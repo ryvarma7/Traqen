@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { motion, MotionConfig } from "framer-motion";
-import { ArrowLeft, Flag, Sparkles } from "lucide-react";
+import { ArrowLeft, Flag, Plus, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -10,7 +10,9 @@ import { useMotionPreferences } from "@/components/shared/motion-provider";
 import { ConfirmDialog } from "@/components/tracks/confirm-dialog";
 import { beginNav } from "@/components/shell/nav-loader";
 import { PhaseAccordion, PhaseRail, PhaseTasks } from "@/components/tracks/phase-list";
+import { PhaseSheet } from "@/components/tracks/phase-sheet";
 import { RescheduleSheet } from "@/components/tracks/reschedule-sheet";
+import { StepSheet } from "@/components/tracks/step-sheet";
 import { TrackMenu } from "@/components/tracks/track-menu";
 import { TrackPhaseStepper } from "@/components/tracks/track-phase-stepper";
 import { UpNextCard } from "@/components/tracks/up-next-card";
@@ -34,6 +36,18 @@ const STEP_UNDO_MS = 6000;
 /** Per-step toast id, so undoing dismisses its own confirmation rather than
  *  every toast on screen. */
 const trackToastId = (itemId: string) => `track-step-done-${itemId}`;
+
+/** Which step sheet is open, and what it is editing. */
+type StepSheetState =
+  | { mode: "create"; phaseId: string }
+  | { mode: "edit"; item: TrackItem }
+  | null;
+
+/** Which phase sheet is open, and what it is editing. */
+type PhaseSheetState =
+  | { mode: "create" }
+  | { mode: "edit"; phase: TrackPhase }
+  | null;
 
 /** The shared provider also handles blur and entrance-delay preferences. */
 export function TrackDetailView(
@@ -63,19 +77,34 @@ function TrackDetail({
   const isMobile = useIsMobile();
 
   const [localItems, setLocalItems] = React.useState(items);
+  const [localPhases, setLocalPhases] = React.useState(phases);
   const [localTrack, setLocalTrack] = React.useState(track);
   const [busyIds, setBusyIds] = React.useState<Set<string>>(() => new Set());
   const [statusBusy, setStatusBusy] = React.useState(false);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
   const [rescheduling, setRescheduling] = React.useState(false);
+  const [stepSheet, setStepSheet] = React.useState<StepSheetState>(null);
+  const [phaseSheet, setPhaseSheet] = React.useState<PhaseSheetState>(null);
+
+  // A change made elsewhere — an edit in a sheet, say — comes back as new
+  // props. The local copies are re-synced from them, but never while a write
+  // is in flight, so an optimistic update is never overwritten by a
+  // response that predates it.
+  const busyRef = React.useRef(busyIds);
+  busyRef.current = busyIds;
+  React.useEffect(() => {
+    if (busyRef.current.size > 0) return;
+    setLocalItems(items);
+    setLocalPhases(phases);
+  }, [items, phases]);
 
   // Everything below is derived, never stored — the header, the stepper, the
   // "up next" card and the phase list all read from the same two arrays, so
   // they cannot disagree with each other after an optimistic update.
   const progress = React.useMemo(
-    () => buildPhaseProgress(phases, localItems),
-    [phases, localItems]
+    () => buildPhaseProgress(localPhases, localItems),
+    [localPhases, localItems]
   );
   const next = React.useMemo(() => upNextItem(progress), [progress]);
   const nextPhase =
@@ -114,6 +143,11 @@ function TrackDetail({
     setSelectedId(id);
     setOpenPhaseId(id);
   };
+
+  const editStep = (item: TrackItem) => setStepSheet({ mode: "edit", item });
+  const addStep = (phaseId: string) => setStepSheet({ mode: "create", phaseId });
+  const editPhase = (phase: TrackPhase) => setPhaseSheet({ mode: "edit", phase });
+  const addPhase = () => setPhaseSheet({ mode: "create" });
 
   /** Optimistic done / not-done toggle with a rollback if the write fails.
    *
@@ -236,10 +270,15 @@ function TrackDetail({
       rescheduling={rescheduling}
       onRescheduleClose={() => setRescheduling(false)}
       onRescheduleApplied={applyReschedule}
+      phases={localPhases}
+      stepSheet={stepSheet}
+      onStepSheetClose={() => setStepSheet(null)}
+      phaseSheet={phaseSheet}
+      onPhaseSheetClose={() => setPhaseSheet(null)}
     />
   );
 
-  if (phases.length === 0 || total === 0) {
+  if (localPhases.length === 0 || total === 0) {
     return (
       <div className="space-y-5">
         <Header
@@ -251,7 +290,7 @@ function TrackDetail({
           nextDue={nextDue}
           menu={menu}
         />
-        <EmptyState />
+        <EmptyState onAddPhase={addPhase} />
         {overlays}
       </div>
     );
@@ -289,6 +328,9 @@ function TrackDetail({
               progress={progress.find((p) => p.phase.id === selectedId)}
               busyIds={busyIds}
               onItemToggle={toggleItem}
+              onItemEdit={editStep}
+              onAddStep={addStep}
+              onEditPhase={editPhase}
             />
           </div>}
         </div>
@@ -305,8 +347,25 @@ function TrackDetail({
           }}
           busyIds={busyIds}
           onItemToggle={toggleItem}
+          onItemEdit={editStep}
+          onAddStep={addStep}
+          onEditPhase={editPhase}
         />
       </div>}
+
+      {/* A phase of the learner's own. It sits below the plan rather than
+          inside it, so it never looks like part of the generated course. */}
+      <button
+        type="button"
+        onClick={() => {
+          haptics.tap();
+          addPhase();
+        }}
+        className="focus-ring flex w-full items-center justify-center gap-2 rounded-card border border-dashed border-white/15 px-4 py-3 text-sm text-muted-foreground transition-colors hover:border-white/30 hover:text-foreground"
+      >
+        <Plus className="h-4 w-4" strokeWidth={1.75} />
+        Add a phase
+      </button>
 
       {overlays}
     </div>
@@ -480,7 +539,7 @@ function TrackDescription({ text }: { text: string | null }) {
   );
 }
 
-function EmptyState() {
+function EmptyState({ onAddPhase }: { onAddPhase: () => void }) {
   return (
     <div className="rounded-card glass-section flex flex-col items-center gap-3 px-6 py-14 text-center">
       <span className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/5">
@@ -489,10 +548,20 @@ function EmptyState() {
       <div>
         <p className="text-base font-semibold text-foreground">This plan is empty</p>
         <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">
-          There are no phases or steps on this track yet. Import a new plan to
-          see your progress here.
+          There are no phases or steps on this track yet. Add a phase and start
+          building the plan yourself.
         </p>
       </div>
+      <button
+        type="button"
+        onClick={() => {
+          haptics.tap();
+          onAddPhase();
+        }}
+        className="glass-btn-base glass-btn-primary mt-1 flex h-10 items-center gap-2 rounded-field px-4 text-sm"
+      >
+        <Plus className="h-4 w-4" /> Add a phase
+      </button>
     </div>
   );
 }
@@ -509,6 +578,11 @@ function Overlays({
   rescheduling,
   onRescheduleClose,
   onRescheduleApplied,
+  phases,
+  stepSheet,
+  onStepSheetClose,
+  phaseSheet,
+  onPhaseSheetClose,
 }: {
   track: LearningTrack;
   confirmingDelete: boolean;
@@ -519,7 +593,18 @@ function Overlays({
   rescheduling: boolean;
   onRescheduleClose: () => void;
   onRescheduleApplied: (shift: Map<string, string>) => void;
+  phases: TrackPhase[];
+  stepSheet: StepSheetState;
+  onStepSheetClose: () => void;
+  phaseSheet: PhaseSheetState;
+  onPhaseSheetClose: () => void;
 }) {
+  const editingPhase =
+    phaseSheet?.mode === "edit" ? phaseSheet.phase : null;
+  const stepCount = editingPhase
+    ? items.filter((item) => item.phase_id === editingPhase.id).length
+    : 0;
+
   return (
     <>
       <RescheduleSheet
@@ -528,6 +613,25 @@ function Overlays({
         trackId={track.id}
         items={items}
         onApplied={onRescheduleApplied}
+      />
+
+      <StepSheet
+        open={stepSheet !== null}
+        onClose={onStepSheetClose}
+        trackId={track.id}
+        phaseId={
+          stepSheet?.mode === "create" ? stepSheet.phaseId : phases[0]?.id ?? ""
+        }
+        phases={phases}
+        item={stepSheet?.mode === "edit" ? stepSheet.item : null}
+      />
+
+      <PhaseSheet
+        open={phaseSheet !== null}
+        onClose={onPhaseSheetClose}
+        trackId={track.id}
+        phase={editingPhase}
+        stepCount={stepCount}
       />
 
       <ConfirmDialog

@@ -2,14 +2,14 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Pencil, Plus } from "lucide-react";
 import { useMotionPreferences } from "@/components/shared/motion-provider";
 import { TrackTaskRow } from "@/components/tracks/track-task-row";
 import { formatShortDate } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
 import { blurIn, blurInTransition } from "@/lib/motion";
 import type { PhaseProgress } from "@/lib/track-plan";
-import type { TrackItem } from "@/lib/types";
+import type { TrackItem, TrackPhase } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /** State glyph for a phase: a tick once every step is done, a filled ring on
@@ -63,12 +63,18 @@ export function PhaseAccordion({
   onSelect,
   busyIds,
   onItemToggle,
+  onItemEdit,
+  onAddStep,
+  onEditPhase,
 }: {
   progress: PhaseProgress[];
   openId: string | null;
   onSelect: (id: string) => void;
   busyIds: Set<string>;
   onItemToggle: (item: TrackItem) => void;
+  onItemEdit?: (item: TrackItem) => void;
+  onAddStep?: (phaseId: string) => void;
+  onEditPhase?: (phase: TrackPhase) => void;
 }) {
   const reduceMotion = useMotionPreferences();
   const accordionId = React.useId();
@@ -92,44 +98,60 @@ export function PhaseAccordion({
               open && "border-white/25"
             )}
           >
-            <button
-              type="button"
-              id={headerId}
-              onClick={() => {
-                haptics.selection();
-                onSelect(p.phase.id);
-              }}
-              aria-expanded={open}
-              aria-controls={panelId}
-              className="focus-ring flex w-full items-center gap-2.5 px-3 py-2.5 text-left"
-            >
-              <PhaseDot state={p.state} />
+            <div className="flex items-center">
+              <button
+                type="button"
+                id={headerId}
+                onClick={() => {
+                  haptics.selection();
+                  onSelect(p.phase.id);
+                }}
+                aria-expanded={open}
+                aria-controls={panelId}
+                className="focus-ring flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2.5 text-left"
+              >
+                <PhaseDot state={p.state} />
 
-              <span className="min-w-0 flex-1">
-                <span
-                  className={cn(
-                    "block truncate text-[0.9375rem] leading-tight",
-                    p.state === "done" ? "text-muted-foreground" : "font-medium text-foreground"
-                  )}
+                <span className="min-w-0 flex-1">
+                  <span
+                    className={cn(
+                      "block truncate text-[0.9375rem] leading-tight",
+                      p.state === "done" ? "text-muted-foreground" : "font-medium text-foreground"
+                    )}
+                  >
+                    <span className="text-muted-foreground">Phase {p.index + 1} · </span>
+                    {p.phase.title}
+                  </span>
+                  <span className="mt-0.5 block font-mono text-2xs tabular-nums text-muted-foreground">
+                    {p.done}/{p.total} done
+                  </span>
+                </span>
+
+                <span className="flex shrink-0 items-center gap-2">
+                  <DateRange range={p.range} />
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 text-muted-foreground transition-transform motion-reduce:transition-none",
+                      open && "rotate-180"
+                    )}
+                  />
+                </span>
+              </button>
+
+              {onEditPhase && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.tap();
+                    onEditPhase(p.phase);
+                  }}
+                  aria-label={`Edit phase ${p.phase.title}`}
+                  className="focus-ring -mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-field text-muted-foreground/70 transition-colors hover:text-foreground"
                 >
-                  <span className="text-muted-foreground">Phase {p.index + 1} · </span>
-                  {p.phase.title}
-                </span>
-                <span className="mt-0.5 block font-mono text-2xs tabular-nums text-muted-foreground">
-                  {p.done}/{p.total} done
-                </span>
-              </span>
-
-              <span className="flex shrink-0 items-center gap-2">
-                <DateRange range={p.range} />
-                <ChevronDown
-                  className={cn(
-                    "h-4 w-4 text-muted-foreground transition-transform motion-reduce:transition-none",
-                    open && "rotate-180"
-                  )}
-                />
-              </span>
-            </button>
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
 
             {open && (
               <motion.div
@@ -157,8 +179,12 @@ export function PhaseAccordion({
                         item={item}
                         busy={busyIds.has(item.id)}
                         onToggle={onItemToggle}
+                        onEdit={onItemEdit}
                       />
                     ))
+                  )}
+                  {onAddStep && (
+                    <AddStepRow onClick={() => onAddStep(p.phase.id)} />
                   )}
                   {complete && (
                     <p className="text-xs font-medium text-muted-foreground">
@@ -172,6 +198,23 @@ export function PhaseAccordion({
         );
       })}
     </div>
+  );
+}
+
+/** The dashed row that adds a step to a phase. */
+function AddStepRow({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        haptics.tap();
+        onClick();
+      }}
+      className="focus-ring flex w-full items-center gap-2.5 rounded-field border border-dashed border-white/15 px-3 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:border-white/30 hover:text-foreground"
+    >
+      <Plus className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+      Add a step
+    </button>
   );
 }
 
@@ -252,17 +295,23 @@ export function PhaseTasks({
   progress,
   busyIds,
   onItemToggle,
+  onItemEdit,
+  onAddStep,
+  onEditPhase,
 }: {
   progress: PhaseProgress | undefined;
   busyIds: Set<string>;
   onItemToggle: (item: TrackItem) => void;
+  onItemEdit?: (item: TrackItem) => void;
+  onAddStep?: (phaseId: string) => void;
+  onEditPhase?: (phase: TrackPhase) => void;
 }) {
   if (!progress) return null;
   const complete = progress.state === "done";
 
   return (
     <section className="rounded-card glass-section p-4 md:p-5" aria-label={`${progress.phase.title} steps`}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
             Phase {progress.index + 1}
@@ -271,7 +320,22 @@ export function PhaseTasks({
             {progress.phase.title}
           </h2>
         </div>
-        <DateRange range={progress.range} />
+        <div className="flex shrink-0 items-center gap-1">
+          <DateRange range={progress.range} />
+          {onEditPhase && (
+            <button
+              type="button"
+              onClick={() => {
+                haptics.tap();
+                onEditPhase(progress.phase);
+              }}
+              aria-label={`Edit phase ${progress.phase.title}`}
+              className="focus-ring -mr-1 flex h-9 w-9 items-center justify-center rounded-field text-muted-foreground/70 transition-colors hover:text-foreground"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {progress.phase.description && (
@@ -292,9 +356,11 @@ export function PhaseTasks({
               item={item}
               busy={busyIds.has(item.id)}
               onToggle={onItemToggle}
+              onEdit={onItemEdit}
             />
           ))
         )}
+        {onAddStep && <AddStepRow onClick={() => onAddStep(progress.phase.id)} />}
       </div>
 
       {complete && progress.total > 0 && (

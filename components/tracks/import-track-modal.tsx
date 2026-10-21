@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { FormSheet } from "@/components/shared/form-sheet";
 import { LoadingBar } from "@/components/shared/loading-bar";
 import { PlanGenerationLoader } from "@/components/tracks/plan-generation-loader";
+import { inputClass } from "@/components/tracks/fields";
 import { useMotionPreferences } from "@/components/shared/motion-provider";
 import { beginNav } from "@/components/shell/nav-loader";
 import {
@@ -130,11 +131,7 @@ function actionMessage(
   return fallback;
 }
 
-const inputClass =
-  "w-full rounded-field glass-input px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50";
-
-export function ImportTrackModal({
-  open,
+export function ImportTrackModal({  open,
   onClose,
 }: {
   open: boolean;

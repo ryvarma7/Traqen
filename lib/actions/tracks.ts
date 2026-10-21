@@ -6,9 +6,11 @@ import { addDaysISO, diffDaysISO, isValidDateOnly } from "@/lib/dates";
 import { safeActionError } from "@/lib/action-errors";
 import { NvidiaRequestError, generateNvidiaText } from "@/lib/nvidia";
 import { createClient } from "@/lib/supabase/server";
+import { moveWithinOrder } from "@/lib/track-plan";
 import {
   learningPlanInputSchema,
   resolveOffset,
+  resourceUrlSchema,
   trackSchema,
   type LearningPlanInput,
   type ParsedTrack,
@@ -603,23 +605,7 @@ export async function setTrackItemStatus(
 
   // Derive track status from its items.
   if (item) {
-    const { data: siblings, error: siblingError } = await supabase
-      .from("track_items")
-      .select("status")
-      .eq("track_id", item.track_id)
-      .eq("user_id", user.id);
-    if (siblingError) return { error: safeActionError(siblingError, "Unable to update this track.") };
-    const list = siblings ?? [];
-    const trackStatus =
-      list.length > 0 && list.every((s) => s.status === "Done")
-        ? "Completed"
-        : "In progress";
-    await supabase
-      .from("learning_tracks")
-      .update({ status: trackStatus, updated_at: new Date().toISOString() })
-      .eq("id", item.track_id)
-      .eq("user_id", user.id)
-      .neq("status", "On hold");
+    await syncTrackStatus(supabase, item.track_id, user.id);
 
     revalidatePath("/");
     revalidatePath("/tracks");
@@ -751,4 +737,562 @@ export async function rescheduleTrackItems(
   revalidatePath("/tracks");
   revalidatePath(`/tracks/${trackId}`);
   return { moved: openDates.length, delta };
+}
+
+/* ── Editing the plan ─────────────────────────────────────────────────────
+ *
+ * An imported plan is a starting point, not a contract. The learner needs to
+ * be able to fix a date, rename a step, add the reading they were actually
+ * assigned, and drop the part of the course that turned out to be
+ * irrelevant. These actions are what make the plan theirs.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+type Supabase = Awaited<ReturnType<typeof createClient>>;
+
+const editableDateSchema = z
+  .string()
+  .refine(isValidDateOnly, "Expected a real calendar date")
+  .nullable()
+  .optional();
+
+const itemFieldsSchema = z
+  .object({
+    title: z.string().trim().min(1).max(500),
+    description: z.string().max(5000).optional().nullable(),
+    resource_url: resourceUrlSchema,
+    target_date: editableDateSchema,
+  })
+  .strict();
+
+const itemPatchSchema = itemFieldsSchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, "Nothing to update");
+
+const phaseFieldsSchema = z
+  .object({
+    title: z.string().trim().min(1).max(500),
+    description: z.string().max(5000).optional().nullable(),
+  })
+  .strict();
+
+const phasePatchSchema = phaseFieldsSchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, "Nothing to update");
+
+/**
+ * Re-derives a track's status from its steps: all done → Completed, anything
+ * else → In progress. An on-hold track is left alone, because "on hold" is a
+ * decision the user made and a step toggle should not quietly undo it.
+ */
+async function syncTrackStatus(
+  supabase: Supabase,
+  trackId: string,
+  userId: string
+) {
+  const { data: items, error } = await supabase
+    .from("track_items")
+    .select("status")
+    .eq("track_id", trackId)
+    .eq("user_id", userId);
+  if (error || !items) return;
+
+  const status =
+    items.length > 0 && items.every((item) => item.status === "Done")
+      ? "Completed"
+      : "In progress";
+
+  await supabase
+    .from("learning_tracks")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", trackId)
+    .eq("user_id", userId)
+    .neq("status", "On hold");
+}
+
+/** Rewrites a phase's step positions to 0, 1, 2, … so the stored order is
+ *  always the order the steps are shown in. */
+async function reindexPhase(
+  supabase: Supabase,
+  phaseId: string,
+  userId: string
+) {
+  const { data: items } = await supabase
+    .from("track_items")
+    .select("id")
+    .eq("phase_id", phaseId)
+    .eq("user_id", userId)
+    .order("position");
+  if (!items || items.length === 0) return;
+
+  await Promise.all(
+    items.map((item, index) =>
+      supabase
+        .from("track_items")
+        .update({ position: index })
+        .eq("id", item.id)
+        .eq("user_id", userId)
+    )
+  );
+}
+
+/** The position a step added to a phase should take: one past the last. */
+async function nextPosition(
+  supabase: Supabase,
+  phaseId: string,
+  userId: string
+): Promise<number> {
+  const { data: siblings } = await supabase
+    .from("track_items")
+    .select("position")
+    .eq("phase_id", phaseId)
+    .eq("user_id", userId);
+  return (siblings ?? []).reduce(
+    (max, row) => Math.max(max, row.position ?? 0),
+    -1
+  ) + 1;
+}
+
+/** Adds a step to the end of a phase. */
+export async function createTrackItem(
+  trackId: string,
+  phaseId: string,
+  input: {
+    title: string;
+    description?: string | null;
+    resource_url?: string | null;
+    target_date?: string | null;
+  }
+): Promise<ActionResult & { itemId?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  if (
+    !idSchema.safeParse(trackId).success ||
+    !idSchema.safeParse(phaseId).success
+  ) {
+    return { error: "Unable to add this step." };
+  }
+
+  const parsed = itemFieldsSchema.safeParse(input);
+  if (!parsed.success) return { error: "Give the step a title." };
+
+  // The phase has to belong to the caller's track, or to no track at all —
+  // never to somebody else's.
+  const { data: phase, error: phaseError } = await supabase
+    .from("track_phases")
+    .select("id")
+    .eq("id", phaseId)
+    .eq("track_id", trackId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (phaseError) {
+    return { error: safeActionError(phaseError, "Unable to add this step.") };
+  }
+  if (!phase) return { error: "That phase doesn't exist." };
+
+  const position = await nextPosition(supabase, phaseId, user.id);
+
+  const { data: inserted, error: insertError } = await supabase
+    .from("track_items")
+    .insert({
+      track_id: trackId,
+      phase_id: phaseId,
+      user_id: user.id,
+      position,
+      title: parsed.data.title,
+      description: parsed.data.description || null,
+      resource_url: parsed.data.resource_url ?? null,
+      target_date: parsed.data.target_date ?? null,
+      status: "To do",
+    })
+    .select("id")
+    .single();
+  if (insertError || !inserted) {
+    return { error: safeActionError(insertError, "Unable to add this step.") };
+  }
+
+  await syncTrackStatus(supabase, trackId, user.id);
+  revalidatePath("/");
+  revalidatePath("/tracks");
+  revalidatePath(`/tracks/${trackId}`);
+  return { itemId: inserted.id };
+}
+
+/** Edits a step's title, description, date or resource. */
+export async function updateTrackItem(
+  id: string,
+  patch: {
+    title?: string;
+    description?: string | null;
+    resource_url?: string | null;
+    target_date?: string | null;
+  }
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  if (!idSchema.safeParse(id).success) {
+    return { error: "Unable to update this step." };
+  }
+
+  const parsed = itemPatchSchema.safeParse(patch);
+  if (!parsed.success) return { error: "Nothing to update." };
+
+  const { data: existing, error: readError } = await supabase
+    .from("track_items")
+    .select("id, track_id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (readError) {
+    return { error: safeActionError(readError, "Unable to update this step.") };
+  }
+  if (!existing) return { error: "That step doesn't exist." };
+
+  // Only the fields the user actually sent are written, so an omitted
+  // field is left exactly as it was.
+  const update: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  if (parsed.data.title !== undefined) update.title = parsed.data.title;
+  if (parsed.data.description !== undefined) {
+    update.description = parsed.data.description || null;
+  }
+  if (parsed.data.resource_url !== undefined) {
+    update.resource_url = parsed.data.resource_url;
+  }
+  if (parsed.data.target_date !== undefined) {
+    update.target_date = parsed.data.target_date ?? null;
+  }
+
+  const { error } = await supabase
+    .from("track_items")
+    .update(update)
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) {
+    return { error: safeActionError(error, "Unable to update this step.") };
+  }
+
+  await syncTrackStatus(supabase, existing.track_id, user.id);
+  revalidatePath("/");
+  revalidatePath("/tracks");
+  revalidatePath(`/tracks/${existing.track_id}`);
+  return {};
+}
+
+/** Removes a step and closes the gap it left in the phase. */
+export async function deleteTrackItem(id: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  if (!idSchema.safeParse(id).success) {
+    return { error: "Unable to remove this step." };
+  }
+
+  const { data: existing, error: readError } = await supabase
+    .from("track_items")
+    .select("id, track_id, phase_id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (readError) {
+    return { error: safeActionError(readError, "Unable to remove this step.") };
+  }
+  if (!existing) return { error: "That step doesn't exist." };
+
+  const { error } = await supabase
+    .from("track_items")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) {
+    return { error: safeActionError(error, "Unable to remove this step.") };
+  }
+
+  await reindexPhase(supabase, existing.phase_id, user.id);
+  await syncTrackStatus(supabase, existing.track_id, user.id);
+  revalidatePath("/");
+  revalidatePath("/tracks");
+  revalidatePath(`/tracks/${existing.track_id}`);
+  return {};
+}
+
+/** Moves a step one place up or down inside its phase. */
+export async function moveTrackItem(
+  id: string,
+  direction: "up" | "down"
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  if (!idSchema.safeParse(id).success) {
+    return { error: "Unable to move this step." };
+  }
+  if (direction !== "up" && direction !== "down") {
+    return { error: "Invalid move." };
+  }
+
+  const { data: existing, error: readError } = await supabase
+    .from("track_items")
+    .select("id, track_id, phase_id, position")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (readError) {
+    return { error: safeActionError(readError, "Unable to move this step.") };
+  }
+  if (!existing) return { error: "That step doesn't exist." };
+
+  const { data: siblings } = await supabase
+    .from("track_items")
+    .select("id, position")
+    .eq("phase_id", existing.phase_id)
+    .eq("user_id", user.id)
+    .order("position");
+
+  const ordered = siblings ?? [];
+  const order = moveWithinOrder(
+    ordered.map((row) => row.id),
+    id,
+    direction
+  );
+  // The step is already at the edge it was asked to move past.
+  if (!order) return {};
+
+  // The whole phase is renumbered from the new order, so the stored
+  // positions are always 0, 1, 2, … and always match the display.
+  const stamp = new Date().toISOString();
+  const results = await Promise.all(
+    order.map((stepId, index) =>
+      supabase
+        .from("track_items")
+        .update({ position: index, updated_at: stamp })
+        .eq("id", stepId)
+        .eq("phase_id", existing.phase_id)
+        .eq("user_id", user.id)
+    )
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) {
+    return { error: safeActionError(failed.error, "Unable to move this step.") };
+  }
+
+  revalidatePath("/tracks");
+  revalidatePath(`/tracks/${existing.track_id}`);
+  return {};
+}
+
+/** Moves a step into a different phase of the same track. */
+export async function moveTrackItemToPhase(
+  id: string,
+  phaseId: string
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  if (!idSchema.safeParse(id).success || !idSchema.safeParse(phaseId).success) {
+    return { error: "Unable to move this step." };
+  }
+
+  const { data: existing, error: readError } = await supabase
+    .from("track_items")
+    .select("id, track_id, phase_id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (readError) {
+    return { error: safeActionError(readError, "Unable to move this step.") };
+  }
+  if (!existing) return { error: "That step doesn't exist." };
+  if (existing.phase_id === phaseId) return {};
+
+  const { data: target, error: targetError } = await supabase
+    .from("track_phases")
+    .select("id")
+    .eq("id", phaseId)
+    .eq("track_id", existing.track_id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (targetError) {
+    return { error: safeActionError(targetError, "Unable to move this step.") };
+  }
+  if (!target) return { error: "That phase doesn't exist." };
+
+  const position = await nextPosition(supabase, phaseId, user.id);
+  const { error } = await supabase
+    .from("track_items")
+    .update({
+      phase_id: phaseId,
+      position,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) {
+    return { error: safeActionError(error, "Unable to move this step.") };
+  }
+
+  // Both phases lose a slot or gain one, so both are renumbered.
+  await reindexPhase(supabase, existing.phase_id, user.id);
+  await reindexPhase(supabase, phaseId, user.id);
+  revalidatePath("/tracks");
+  revalidatePath(`/tracks/${existing.track_id}`);
+  return {};
+}
+
+/** Adds a phase to the end of a track. */
+export async function createTrackPhase(
+  trackId: string,
+  input: { title: string; description?: string | null }
+): Promise<ActionResult & { phaseId?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  if (!idSchema.safeParse(trackId).success) {
+    return { error: "Unable to add this phase." };
+  }
+
+  const parsed = phaseFieldsSchema.safeParse(input);
+  if (!parsed.success) return { error: "Give the phase a title." };
+
+  const { data: track, error: trackError } = await supabase
+    .from("learning_tracks")
+    .select("id")
+    .eq("id", trackId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (trackError) {
+    return { error: safeActionError(trackError, "Unable to add this phase.") };
+  }
+  if (!track) return { error: "That track doesn't exist." };
+
+  const { data: siblings } = await supabase
+    .from("track_phases")
+    .select("position")
+    .eq("track_id", trackId)
+    .eq("user_id", user.id);
+  const position =
+    (siblings ?? []).reduce((max, row) => Math.max(max, row.position ?? 0), -1) + 1;
+
+  const { data: inserted, error: insertError } = await supabase
+    .from("track_phases")
+    .insert({
+      track_id: trackId,
+      user_id: user.id,
+      position,
+      title: parsed.data.title,
+      description: parsed.data.description || null,
+    })
+    .select("id")
+    .single();
+  if (insertError || !inserted) {
+    return { error: safeActionError(insertError, "Unable to add this phase.") };
+  }
+
+  revalidatePath("/tracks");
+  revalidatePath(`/tracks/${trackId}`);
+  return { phaseId: inserted.id };
+}
+
+/** Edits a phase's title or description. */
+export async function updateTrackPhase(
+  id: string,
+  patch: { title?: string; description?: string | null }
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  if (!idSchema.safeParse(id).success) {
+    return { error: "Unable to update this phase." };
+  }
+
+  const parsed = phasePatchSchema.safeParse(patch);
+  if (!parsed.success) return { error: "Nothing to update." };
+
+  const { data: existing, error: readError } = await supabase
+    .from("track_phases")
+    .select("id, track_id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (readError) {
+    return { error: safeActionError(readError, "Unable to update this phase.") };
+  }
+  if (!existing) return { error: "That phase doesn't exist." };
+
+  const update: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  if (parsed.data.title !== undefined) update.title = parsed.data.title;
+  if (parsed.data.description !== undefined) {
+    update.description = parsed.data.description || null;
+  }
+
+  const { error } = await supabase
+    .from("track_phases")
+    .update(update)
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) {
+    return { error: safeActionError(error, "Unable to update this phase.") };
+  }
+
+  revalidatePath("/tracks");
+  revalidatePath(`/tracks/${existing.track_id}`);
+  return {};
+}
+
+/** Removes a phase and every step inside it. */
+export async function deleteTrackPhase(id: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  if (!idSchema.safeParse(id).success) {
+    return { error: "Unable to remove this phase." };
+  }
+
+  const { data: existing, error: readError } = await supabase
+    .from("track_phases")
+    .select("id, track_id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (readError) {
+    return { error: safeActionError(readError, "Unable to remove this phase.") };
+  }
+  if (!existing) return { error: "That phase doesn't exist." };
+
+  // The steps inside the phase cascade with it.
+  const { error } = await supabase
+    .from("track_phases")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) {
+    return { error: safeActionError(error, "Unable to remove this phase.") };
+  }
+
+  await syncTrackStatus(supabase, existing.track_id, user.id);
+  revalidatePath("/");
+  revalidatePath("/tracks");
+  revalidatePath(`/tracks/${existing.track_id}`);
+  return {};
 }

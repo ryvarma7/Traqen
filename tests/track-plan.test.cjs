@@ -6,6 +6,7 @@ const loadTs = createLoader();
 const {
   applyReschedule,
   buildPhaseProgress,
+  moveWithinOrder,
   nextDueItem,
   nextStepByTrack,
   paceOf,
@@ -341,7 +342,6 @@ test("a zero shift changes nothing", () => {
 });
 
 /* ── nextStepByTrack ─────────────────────────────────────────────────────── */
-
 test("each active track contributes exactly one next step", () => {
   const { phases, items } = makeTrackFixture();
   const tracks = [{ id: "track-1", status: "In progress" }];
@@ -416,4 +416,44 @@ test("a step belonging to an unknown track is ignored", () => {
   const tracks = [{ id: "track-2", status: "In progress" }];
 
   assert.equal(nextStepByTrack(tracks, phases, items).size, 0);
+});
+
+/* ── moveWithinOrder ────────────────────────────────────────────────────── */
+
+test("moving a step up swaps it with the one above it", () => {
+  const order = moveWithinOrder(["a", "b", "c"], "b", "up");
+  assert.deepEqual(order, ["b", "a", "c"]);
+});
+
+test("moving a step down swaps it with the one below it", () => {
+  const order = moveWithinOrder(["a", "b", "c"], "b", "down");
+  assert.deepEqual(order, ["a", "c", "b"]);
+});
+
+test("moving the first step up changes nothing", () => {
+  assert.equal(moveWithinOrder(["a", "b", "c"], "a", "up"), null);
+});
+
+test("moving the last step down changes nothing", () => {
+  assert.equal(moveWithinOrder(["a", "b", "c"], "c", "down"), null);
+});
+
+test("moving a step that is not in the list changes nothing", () => {
+  assert.equal(moveWithinOrder(["a", "b", "c"], "ghost", "up"), null);
+});
+
+test("moving a step keeps the rest of the order intact", () => {
+  const order = moveWithinOrder(["a", "b", "c", "d", "e"], "d", "up");
+  assert.deepEqual(order, ["a", "b", "d", "c", "e"]);
+});
+
+test("moving a step does not change the list it was given", () => {
+  const ids = ["a", "b", "c"];
+  moveWithinOrder(ids, "b", "up");
+  assert.deepEqual(ids, ["a", "b", "c"]);
+});
+
+test("a lone step has nowhere to move", () => {
+  assert.equal(moveWithinOrder(["a"], "a", "up"), null);
+  assert.equal(moveWithinOrder(["a"], "a", "down"), null);
 });

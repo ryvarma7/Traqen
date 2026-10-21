@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ExternalLink } from "lucide-react";
+import { Check, ExternalLink, Pencil } from "lucide-react";
 import { CountdownPill } from "@/components/shared/countdown-pill";
 import { LoadingBar } from "@/components/shared/loading-bar";
 import { formatShortDate } from "@/lib/dates";
@@ -19,16 +19,22 @@ const TAP = "h-11 w-11";
  * three-state cycle (To do → In progress → Done) is gone from the UI, but
  * rows already sitting at "In progress" still read as open, so no data is
  * orphaned by the change.
+ *
+ * The title opens the step for editing. An imported plan is a starting
+ * point: the date is wrong, the step is called the wrong thing, or there is
+ * a reading the learner was actually assigned.
  */
 export function TrackTaskRow({
   item,
   busy,
   onToggle,
+  onEdit,
   className,
 }: {
   item: TrackItem;
   busy?: boolean;
   onToggle: (item: TrackItem) => void;
+  onEdit?: (item: TrackItem) => void;
   className?: string;
 }) {
   const done = item.status === "Done";
@@ -37,7 +43,7 @@ export function TrackTaskRow({
   return (
     <div
       className={cn(
-        "rounded-field glass-tile px-3 py-2.5 transition-opacity md:px-3.5 md:py-3",
+        "group rounded-field glass-tile px-3 py-2.5 transition-opacity md:px-3.5 md:py-3",
         done && "opacity-60",
         className
       )}
@@ -46,26 +52,64 @@ export function TrackTaskRow({
         <StatusCheckbox item={item} busy={busy} onToggle={onToggle} />
 
         <div className="min-w-0 flex-1 py-0.5">
-          <span className="relative block">
-            <p
-              className={cn(
-                "break-words text-[0.9375rem] leading-snug md:text-base",
-                done ? "text-muted-foreground" : "font-medium text-foreground"
-              )}
+          {onEdit ? (
+            <button
+              type="button"
+              onClick={() => {
+                haptics.tap();
+                onEdit(item);
+              }}
+              aria-label={`Edit step: ${item.title}`}
+              className="focus-ring block w-full rounded-field text-left"
             >
-              {item.title}
-            </p>
-            {/* The crossing-out line, drawn from the left rather than switched
-                on with a CSS `line-through` — the stroke is the confirmation
-                that the tap registered. */}
-            <motion.span
-              aria-hidden
-              className="pointer-events-none absolute left-0 top-1/2 h-px w-full origin-left bg-foreground/60"
-              initial={false}
-              animate={{ scaleX: done ? 1 : 0 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-            />
-          </span>
+              <span className="relative block">
+                <p
+                  className={cn(
+                    "break-words text-[0.9375rem] leading-snug md:text-base",
+                    done ? "text-muted-foreground" : "font-medium text-foreground"
+                  )}
+                >
+                  {item.title}
+                </p>
+                {/* The crossing-out line, drawn from the left rather than
+                    switched on with a CSS `line-through` — the stroke is the
+                    confirmation that the tap registered. */}
+                <motion.span
+                  aria-hidden
+                  className="pointer-events-none absolute left-0 top-1/2 h-px w-full origin-left bg-foreground/60"
+                  initial={false}
+                  animate={{ scaleX: done ? 1 : 0 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                />
+              </span>
+              {/* The hint that the title is editable. It fades in on hover
+                  and on focus, so it never sits on the row permanently, and
+                  it is hidden from a screen reader because the button's own
+                  label already says what it does. */}
+              <Pencil
+                aria-hidden
+                className="mt-1 h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-70 focus-visible:opacity-70"
+              />
+            </button>
+          ) : (
+            <span className="relative block">
+              <p
+                className={cn(
+                  "break-words text-[0.9375rem] leading-snug md:text-base",
+                  done ? "text-muted-foreground" : "font-medium text-foreground"
+                )}
+              >
+                {item.title}
+              </p>
+              <motion.span
+                aria-hidden
+                className="pointer-events-none absolute left-0 top-1/2 h-px w-full origin-left bg-foreground/60"
+                initial={false}
+                animate={{ scaleX: done ? 1 : 0 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+              />
+            </span>
+          )}
           <ClampedDescription text={item.description} />
         </div>
 

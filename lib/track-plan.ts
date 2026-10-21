@@ -212,6 +212,30 @@ export function nextDueItem(
 }
 
 /**
+ * The order a phase's steps end up in when one of them moves a place.
+ *
+ * Returns null when the move would leave the phase unchanged — the step is
+ * already at the edge it was asked to move past, or it is not in the list at
+ * all.
+ */
+export function moveWithinOrder(
+  ids: string[],
+  id: string,
+  direction: "up" | "down"
+): string[] | null {
+  const index = ids.indexOf(id);
+  if (index === -1) return null;
+
+  const target = direction === "up" ? index - 1 : index + 1;
+  if (target < 0 || target >= ids.length) return null;
+
+  const next = [...ids];
+  next.splice(index, 1);
+  next.splice(target, 0, id);
+  return next;
+}
+
+/**
  * "Reschedule remaining": anchor the first open dated task on `newStartISO`
  * and shift every other open dated task by the same number of days, which
  * preserves the relative spacing between tasks and across phase boundaries.
