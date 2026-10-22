@@ -3,7 +3,7 @@
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ExternalLink, Pencil } from "lucide-react";
-import { CountdownPill } from "@/components/shared/countdown-pill";
+import { CountdownPill, countdownShowsDate } from "@/components/shared/countdown-pill";
 import { LoadingBar } from "@/components/shared/loading-bar";
 import { formatShortDate } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
@@ -135,9 +135,13 @@ export function TrackTaskRow({
       {item.target_date && (
         <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-9">
           <CountdownPill date={item.target_date} />
-          <span className="font-mono text-2xs tabular-nums text-muted-foreground">
-            {formatShortDate(item.target_date)}
-          </span>
+          {/* More than a week out the pill *is* the date — printing it again
+              beside the pill would show "Oct 30 Oct 30". */}
+          {!countdownShowsDate(item.target_date) && (
+            <span className="font-mono text-2xs tabular-nums text-muted-foreground">
+              {formatShortDate(item.target_date)}
+            </span>
+          )}
         </div>
       )}
     </div>

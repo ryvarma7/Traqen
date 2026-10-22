@@ -3,7 +3,7 @@
 import * as React from "react";
 import { motion } from "framer-motion";
 import { Check, ExternalLink, PartyPopper } from "lucide-react";
-import { CountdownPill } from "@/components/shared/countdown-pill";
+import { CountdownPill, countdownShowsDate } from "@/components/shared/countdown-pill";
 import { LoadingBar } from "@/components/shared/loading-bar";
 import { daysUntil, formatShortDate, relativeDays } from "@/lib/dates";
 import { haptics } from "@/lib/haptics";
@@ -18,12 +18,21 @@ import { cn, safeHttpUrl } from "@/lib/utils";
 export function UpNextCard({
   item,
   phase,
+  showPhaseLabel = true,
   totalItems,
   busy,
   onMarkDone,
 }: {
   item: TrackItem | null;
   phase: TrackPhase | null;
+  /**
+   * Whether the card names the phase the step belongs to. The plan below
+   * the card names that phase too — as the selected phase's header on the
+   * desktop layout, as every accordion header on the mobile one — so the
+   * caller drops the tag whenever the card would be the second copy of a
+   * name already on screen.
+   */
+  showPhaseLabel?: boolean;
   totalItems: number;
   busy?: boolean;
   onMarkDone: (item: TrackItem) => void;
@@ -38,7 +47,13 @@ export function UpNextCard({
       </p>
 
       {item ? (
-        <UpNextBody item={item} phase={phase} busy={busy} onMarkDone={onMarkDone} />
+        <UpNextBody
+          item={item}
+          phase={phase}
+          showPhaseLabel={showPhaseLabel}
+          busy={busy}
+          onMarkDone={onMarkDone}
+        />
       ) : (
         <CompletionBody totalItems={totalItems} />
       )}
@@ -49,11 +64,13 @@ export function UpNextCard({
 function UpNextBody({
   item,
   phase,
+  showPhaseLabel,
   busy,
   onMarkDone,
 }: {
   item: TrackItem;
   phase: TrackPhase | null;
+  showPhaseLabel: boolean;
   busy?: boolean;
   onMarkDone: (item: TrackItem) => void;
 }) {
@@ -62,6 +79,9 @@ function UpNextBody({
   const descRef = React.useRef<HTMLParagraphElement>(null);
   const href = safeHttpUrl(item.resource_url);
   const days = item.target_date ? daysUntil(item.target_date) : null;
+  // The tag is only worth its place when this card is the one naming the
+  // phase. Everywhere else the plan underneath already says it.
+  const taggedPhase = showPhaseLabel ? phase : null;
 
   React.useEffect(() => {
     setExpanded(false);
@@ -75,21 +95,28 @@ function UpNextBody({
 
   return (
     <>
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {phase && (
-          <span className="rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 text-2xs font-medium text-foreground/85">
-            {phase.title}
-          </span>
-        )}
-        {item.target_date && (
-          <>
-            <CountdownPill date={item.target_date} />
-            <span className="font-mono text-2xs tabular-nums text-muted-foreground">
-              {formatShortDate(item.target_date)} · {relativeDays(days ?? 0)}
+      {(taggedPhase || item.target_date) && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {taggedPhase && (
+            <span className="rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 text-2xs font-medium text-foreground/85">
+              {taggedPhase.title}
             </span>
-          </>
-        )}
-      </div>
+          )}
+          {item.target_date && (
+            <>
+              <CountdownPill date={item.target_date} />
+              {/* Beyond a week the pill carries the date itself, so the text
+                  beside it keeps only the relative phrasing — otherwise the
+                  card reads "Oct 30 Oct 30". */}
+              <span className="font-mono text-2xs tabular-nums text-muted-foreground">
+                {countdownShowsDate(item.target_date)
+                  ? relativeDays(days ?? 0)
+                  : `${formatShortDate(item.target_date)} · ${relativeDays(days ?? 0)}`}
+              </span>
+            </>
+          )}
+        </div>
+      )}
 
       <h2 className="mt-2.5 break-words text-lg font-semibold leading-snug tracking-tight text-foreground md:text-xl">
         {item.title}

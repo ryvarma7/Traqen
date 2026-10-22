@@ -1,6 +1,17 @@
 import { daysUntil, formatShortDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
+/** Past this many days out the pill stops counting down and shows the
+ *  calendar date instead — counting down to a date three weeks away is noise. */
+const DATE_ONLY_AFTER_DAYS = 7;
+
+/** True when the pill renders the calendar date rather than a countdown, i.e.
+ *  the date is more than a week out. Callers that print the date beside the
+ *  pill use this so the same date is never shown twice, side by side. */
+export function countdownShowsDate(date: string): boolean {
+  return daysUntil(date) > DATE_ONLY_AFTER_DAYS;
+}
+
 /** Deadline countdown pill with glass finish. Colors per spec:
  *  red = overdue/today, orange = 1–3 days, amber = 4–7, green/gray = 7+. */
 export function CountdownPill({
@@ -30,7 +41,7 @@ export function CountdownPill({
   } else if (days <= 3) {
     label = `${days}d left`;
     tone = "bg-orange-500/10 text-orange-400 border-orange-500/30";
-  } else if (days <= 7) {
+  } else if (days <= DATE_ONLY_AFTER_DAYS) {
     label = `${days}d left`;
     tone = "bg-warning-soft/80 text-warning border-warning-border/70";
   } else {
