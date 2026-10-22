@@ -124,6 +124,27 @@ function TrackDetail({
   );
   const [openPhaseId, setOpenPhaseId] = React.useState<string | null>(currentPhaseId);
 
+  // Which phases have their finished steps unfolded. It lives here so the
+  // choice survives switching phases and folding the accordion shut.
+  const [unfoldedPhases, setUnfoldedPhases] = React.useState<Set<string>>(
+    () => new Set()
+  );
+  const toggleUnfolded = React.useCallback((phaseId: string) => {
+    setUnfoldedPhases((prev) => {
+      const next = new Set(prev);
+      if (next.has(phaseId)) next.delete(phaseId);
+      else next.add(phaseId);
+      return next;
+    });
+  }, []);
+
+  // The plan below the up-next card already names the phase: on desktop as
+  // the selected phase's header, on mobile as the header of every phase in
+  // the accordion. The card only names it too when the desktop pane is
+  // showing a different phase — otherwise the same words appear twice on
+  // one screen.
+  const phaseNamedBelow = isMobile || selectedId === nextPhase?.phase.id;
+
   // The mobile accordion always tracks the derived current phase ("only the
   // current phase is expanded"). The desktop pane follows the plan forward as
   // phases get finished — otherwise finishing phase 1 left the pane below
@@ -154,7 +175,8 @@ function TrackDetail({
    *  Marking a step done is one tap and instantly rewrites the "Up next" card
    *  to a different task, so the row the user hit is gone from view before
    *  they've registered the tap. The undo toast is the way back for a
-   *  mis-tap; the phase list below still shows the step struck through. */
+   *  mis-tap; the phase list below folds the step into its count of
+   *  completed steps. */
   const toggleItem = async (item: TrackItem) => {
     if (busyIds.has(item.id)) return;
     const nextStatus: TrackItem["status"] = item.status === "Done" ? "To do" : "Done";
@@ -319,6 +341,7 @@ function TrackDetail({
         <UpNextCard
           item={next}
           phase={nextPhase?.phase ?? null}
+          showPhaseLabel={!phaseNamedBelow}
           totalItems={total}
           busy={next ? busyIds.has(next.id) : false}
           onMarkDone={toggleItem}
@@ -332,6 +355,8 @@ function TrackDetail({
             onItemEdit={editStep}
             onAddStep={addStep}
             onEditPhase={editPhase}
+            unfoldedPhaseIds={unfoldedPhases}
+            onToggleUnfolded={toggleUnfolded}
           />
         </div>}
       </div>
@@ -350,6 +375,8 @@ function TrackDetail({
           onItemEdit={editStep}
           onAddStep={addStep}
           onEditPhase={editPhase}
+          unfoldedPhaseIds={unfoldedPhases}
+          onToggleUnfolded={toggleUnfolded}
         />
       </div>}
 

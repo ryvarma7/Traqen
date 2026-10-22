@@ -66,6 +66,8 @@ export function PhaseAccordion({
   onItemEdit,
   onAddStep,
   onEditPhase,
+  unfoldedPhaseIds,
+  onToggleUnfolded,
 }: {
   progress: PhaseProgress[];
   openId: string | null;
@@ -75,6 +77,9 @@ export function PhaseAccordion({
   onItemEdit?: (item: TrackItem) => void;
   onAddStep?: (phaseId: string) => void;
   onEditPhase?: (phase: TrackPhase) => void;
+  /** Phases whose finished steps are unfolded. */
+  unfoldedPhaseIds: Set<string>;
+  onToggleUnfolded: (phaseId: string) => void;
 }) {
   const reduceMotion = useMotionPreferences();
   const accordionId = React.useId();
@@ -113,9 +118,14 @@ export function PhaseAccordion({
                 <PhaseDot state={p.state} />
 
                 <span className="min-w-0 flex-1">
+                  {/*
+                    The name gets two lines rather than one cut-off line: a
+                    generated phase name is often a full sentence, and half
+                    of it is not enough to recognise the phase by.
+                  */}
                   <span
                     className={cn(
-                      "block truncate text-[0.9375rem] leading-tight",
+                      "line-clamp-2 break-words text-[0.9375rem] leading-tight",
                       p.state === "done" ? "text-muted-foreground" : "font-medium text-foreground"
                     )}
                   >
@@ -173,15 +183,14 @@ export function PhaseAccordion({
                       No steps in this phase.
                     </p>
                   ) : (
-                    p.items.map((item) => (
-                      <TrackTaskRow
-                        key={item.id}
-                        item={item}
-                        busy={busyIds.has(item.id)}
-                        onToggle={onItemToggle}
-                        onEdit={onItemEdit}
-                      />
-                    ))
+                    <PhaseItems
+                      items={p.items}
+                      busyIds={busyIds}
+                      onItemToggle={onItemToggle}
+                      onItemEdit={onItemEdit}
+                      showDone={unfoldedPhaseIds.has(p.phase.id)}
+                      onToggleDone={() => onToggleUnfolded(p.phase.id)}
+                    />
                   )}
                   {onAddStep && (
                     <AddStepRow onClick={() => onAddStep(p.phase.id)} />
@@ -218,6 +227,91 @@ function AddStepRow({ onClick }: { onClick: () => void }) {
   );
 }
 
+/* ── A phase's steps ─────────────────────────────────────────────────────── */
+
+/**
+ * One phase's steps.
+ *
+ * The finished ones are folded into a single line — "3 completed steps" —
+ * until the learner asks for them. Halfway through a plan, most of what a
+ * phase holds is history, and every finished row is a full card of
+ * struck-through text that pushes the steps still open off the screen.
+ *
+ * The open steps keep the order the plan gives them. The finished ones keep
+ * their order relative to each other, behind the summary line, so nothing
+ * about the phase is lost — it is only out of the way until it is wanted.
+ */
+function PhaseItems({
+  items,
+  busyIds,
+  onItemToggle,
+  onItemEdit,
+  showDone,
+  onToggleDone,
+}: {
+  items: TrackItem[];
+  busyIds: Set<string>;
+  onItemToggle: (item: TrackItem) => void;
+  onItemEdit?: (item: TrackItem) => void;
+  /** Whether the finished steps are unfolded. */
+  showDone: boolean;
+  onToggleDone: () => void;
+}) {
+  const reduceMotion = useMotionPreferences();
+  const open = items.filter((item) => item.status !== "Done");
+  const done = items.filter((item) => item.status === "Done");
+
+  const row = (item: TrackItem) => (
+    <TrackTaskRow
+      key={item.id}
+      item={item}
+      busy={busyIds.has(item.id)}
+      onToggle={onItemToggle}
+      onEdit={onItemEdit}
+    />
+  );
+
+  return (
+    <div className="space-y-2">
+      {open.map(row)}
+
+      {showDone && done.length > 0 && (
+        <motion.div
+          initial={reduceMotion ? false : blurIn.initial}
+          animate={blurIn.animate}
+          transition={reduceMotion ? { duration: 0 } : blurInTransition}
+          className="space-y-2"
+        >
+          {done.map(row)}
+        </motion.div>
+      )}
+
+      {done.length > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            haptics.selection();
+            onToggleDone();
+          }}
+          aria-expanded={showDone}
+          className="focus-ring flex min-h-11 w-full items-center gap-2 rounded-field px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+        >
+          <Check className="h-4 w-4 shrink-0" strokeWidth={2.5} />
+          <span className="flex-1 text-left">
+            {done.length} completed {done.length === 1 ? "step" : "steps"}
+          </span>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none",
+              showDone && "rotate-180"
+            )}
+          />
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function PhaseTasks({
   progress,
   busyIds,
@@ -225,6 +319,8 @@ export function PhaseTasks({
   onItemEdit,
   onAddStep,
   onEditPhase,
+  unfoldedPhaseIds,
+  onToggleUnfolded,
 }: {
   progress: PhaseProgress | undefined;
   busyIds: Set<string>;
@@ -232,6 +328,9 @@ export function PhaseTasks({
   onItemEdit?: (item: TrackItem) => void;
   onAddStep?: (phaseId: string) => void;
   onEditPhase?: (phase: TrackPhase) => void;
+  /** Phases whose finished steps are unfolded. */
+  unfoldedPhaseIds: Set<string>;
+  onToggleUnfolded: (phaseId: string) => void;
 }) {
   if (!progress) return null;
   const complete = progress.state === "done";
@@ -277,15 +376,14 @@ export function PhaseTasks({
             No steps in this phase.
           </p>
         ) : (
-          progress.items.map((item) => (
-            <TrackTaskRow
-              key={item.id}
-              item={item}
-              busy={busyIds.has(item.id)}
-              onToggle={onItemToggle}
-              onEdit={onItemEdit}
-            />
-          ))
+          <PhaseItems
+            items={progress.items}
+            busyIds={busyIds}
+            onItemToggle={onItemToggle}
+            onItemEdit={onItemEdit}
+            showDone={unfoldedPhaseIds.has(progress.phase.id)}
+            onToggleDone={() => onToggleUnfolded(progress.phase.id)}
+          />
         )}
         {onAddStep && <AddStepRow onClick={() => onAddStep(progress.phase.id)} />}
       </div>

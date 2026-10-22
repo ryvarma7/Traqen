@@ -89,7 +89,7 @@ const StepNode = React.forwardRef<
       onClick={onSelect}
       aria-current={isCurrent ? "step" : undefined}
       className={cn(
-        "focus-ring flex w-[104px] shrink-0 flex-col items-center gap-1.5 rounded-field px-1 py-1.5 transition-colors sm:w-[136px]",
+        "focus-ring flex w-[116px] shrink-0 flex-col items-center gap-1.5 rounded-field px-1 py-1.5 transition-colors sm:w-[152px]",
         selected ? "bg-white/8" : "hover:bg-white/5"
       )}
     >
@@ -122,16 +122,25 @@ const StepNode = React.forwardRef<
         )}
       </span>
 
+      {/*
+        The phase name gets three lines rather than one truncated line: a
+        plan of eight phases is mostly names, and a name cut in half
+        ("Foundations of Mach…") is not a name the learner can recognise.
+        The title attribute keeps the full name available on hover.
+      */}
       <span
+        title={phase.title}
         className={cn(
-          "w-full truncate text-center text-xs leading-tight",
+          "line-clamp-3 w-full break-words text-center text-xs leading-tight",
           selected ? "font-semibold text-foreground" : "text-foreground/85"
         )}
       >
         {phase.title}
       </span>
 
-      <span className="font-mono text-2xs tabular-nums text-muted-foreground">
+      {/* `mt-auto` keeps the count on the same line across the row however
+          many lines the name above it took. */}
+      <span className="mt-auto font-mono text-2xs tabular-nums text-muted-foreground">
         {done}/{total}
       </span>
     </button>
