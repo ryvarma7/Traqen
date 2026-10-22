@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { FormSheet } from "@/components/shared/form-sheet";
 import { LoadingBar } from "@/components/shared/loading-bar";
 import { fieldLabelClass, inputClass } from "@/components/tracks/fields";
+import { Select } from "@/components/ui/select";
 import {
   createTrackItem,
   deleteTrackItem,
@@ -232,7 +233,7 @@ export function StepSheet({
             <label htmlFor="step-phase" className={fieldLabelClass}>
               Phase
             </label>
-            <select
+            <Select
               id="step-phase"
               value={targetPhase}
               onChange={(event) => {
@@ -240,14 +241,14 @@ export function StepSheet({
                 void rephase(event.target.value);
               }}
               disabled={busy}
-              className={cn(inputClass, "h-10 [color-scheme:dark]")}
+              className="h-10"
             >
               {phases.map((phase) => (
                 <option key={phase.id} value={phase.id}>
                   {phase.title}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
 
