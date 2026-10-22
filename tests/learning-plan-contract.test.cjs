@@ -7,10 +7,11 @@ const loadTs = createLoader();
 const { learningPlanInputSchema, parseGeneratedTrack } = loadTs(
   "lib/tracks/contract.ts"
 );
-const { buildOutlineMessages, parseOutline, planScale } = loadTs(
+const { LEARNING_PLAN_LIMITS } = loadTs("lib/tracks/limits.ts");
+const { buildOutlineMessages, parseOutline } = loadTs(
   "lib/tracks/outline.ts"
 );
-const { buildEnrichMessages, mergeEnrichment, parseEnrichment } = loadTs(
+const { buildEnrichMessages, mergeEnrichment, parseEnrichment, planEnrichmentBatches, ENRICHMENT_BATCH_STEPS } = loadTs(
   "lib/tracks/enrich.ts"
 );
 
@@ -59,6 +60,45 @@ function makeTrack(overrides = {}) {
   };
 }
 
+/* ── The form's limits ──────────────────────────────────────────────────── */
+
+test("a full-length set of specifications is accepted", () => {
+  const specs = "a".repeat(LEARNING_PLAN_LIMITS.specs);
+  const result = learningPlanInputSchema.safeParse({ ...input, specs });
+
+  assert.equal(result.success, true);
+  assert.equal(specs.length, 120_000);
+});
+
+test("the specifications box holds twenty thousand words", () => {
+  // 20,000 words is about 120,000 characters — six characters a word with
+  // the space. The limit is the point of the exercise, so it is pinned.
+  assert.equal(LEARNING_PLAN_LIMITS.specs, 120_000);
+});
+
+test("specifications past the limit are rejected", () => {
+  const specs = "a".repeat(LEARNING_PLAN_LIMITS.specs + 1);
+  const result = learningPlanInputSchema.safeParse({ ...input, specs });
+
+  assert.equal(result.success, false);
+  assert.equal(result.error.issues[0].path.join("."), "specs");
+});
+
+test("a topic past the limit is rejected", () => {
+  const topic = "a".repeat(LEARNING_PLAN_LIMITS.topic + 1);
+  const result = learningPlanInputSchema.safeParse({ ...input, topic });
+
+  assert.equal(result.success, false);
+  assert.equal(result.error.issues[0].path.join("."), "topic");
+});
+
+test("a long but legal topic is accepted", () => {
+  const topic = "a".repeat(LEARNING_PLAN_LIMITS.topic);
+  const result = learningPlanInputSchema.safeParse({ ...input, topic });
+
+  assert.equal(result.success, true);
+});
+
 /* ── The outline prompt ─────────────────────────────────────────────────── */
 
 test("the outline prompt carries the form values in the user message and the contract in the system message", () => {
@@ -91,9 +131,10 @@ test("the outline prompt asks for a detailed course with verifiable steps", () =
   assert.doesNotMatch(system, /WHY this step matters/i);
 });
 
-test("the outline prompt states how many phases and steps the plan gets", () => {
+test("the outline prompt leaves the shape of the course to the model", () => {
   const { system } = buildOutlineMessages(input);
-  assert.match(system, /exactly 5 ordered phases and between 5 and 6 steps per phase/i);
+  assert.match(system, /as many phases and as many steps per phase as the course genuinely needs/i);
+  assert.match(system, /the topic, the specifications and the window decide the shape of the course/i);
 });
 
 test("the outline prompt says the example shows the shape, not the count", () => {
@@ -112,7 +153,7 @@ test("an open-ended plan schedules with offsets and no end date", () => {
 
 test("the retry prompt keeps the contract but asks for a smaller plan", () => {
   const { system, user } = buildOutlineMessages(input, { compact: true });
-  assert.match(system, /exactly 5 ordered phases and between 4 and 4 steps per phase/i);
+  assert.match(system, /leaner course plan/i);
   assert.match(system, /Return exactly one JSON object and nothing else/i);
   assert.match(system, /absolute_date/);
   assert.match(user, /BEGIN USER INPUT/);
@@ -134,37 +175,70 @@ test("user instructions stay inside an untrusted data boundary", () => {
   assert.doesNotMatch(system, /reveal the API key/);
 });
 
-/* ── How big the plan gets ─────────────────────────────────────────────── */
+/* ── How big the plan gets ──────────────────────────────────────────────── */
 
-test("a longer window earns more steps", () => {
-  const short = planScale(7);
-  const medium = planScale(29);
-  const long = planScale(120);
-
-  assert.ok(short.phases * short.maxSteps < medium.phases * medium.maxSteps);
-  assert.ok(medium.phases * medium.maxSteps < long.phases * long.maxSteps);
+test("the prompt leaves the plan's size to the model", () => {
+  const { system } = buildOutlineMessages(input);
+  // No count is prescribed any more: the window and the topic decide.
+  assert.doesNotMatch(system, /Create exactly \d+ ordered phases/);
+  assert.doesNotMatch(system, /between \d+ and \d+ steps per phase/);
+  assert.match(system, /as many phases and as many steps per phase as the course genuinely needs/i);
+  assert.match(system, /no fixed count/i);
 });
 
-test("an open-ended plan gets the mid-sized plan", () => {
-  const scale = planScale(null);
-  assert.equal(scale.phases, 6);
-  assert.ok(scale.minSteps >= 5);
+test("the compact retry asks for a leaner course rather than a fixed count", () => {
+  const { system } = buildOutlineMessages(input, { compact: true });
+  assert.match(system, /leaner course plan/i);
+  assert.doesNotMatch(system, /Create exactly \d+ ordered phases/);
 });
 
-test("the compact plan is smaller than the full one", () => {
-  const full = planScale(29);
-  const compact = planScale(29, true);
-  assert.ok(compact.phases * compact.maxSteps < full.phases * full.maxSteps);
-  assert.ok(compact.maxSteps <= full.maxSteps);
+test("a plan may hold as many phases and steps as it needs", () => {
+  const many = {
+    track_title: "A long course",
+    description: null,
+    phases: Array.from({ length: 12 }, (_, phase) => ({
+      title: `Phase ${phase + 1}`,
+      description: null,
+      items: Array.from({ length: 15 }, (_, item) => ({
+        title: `Action ${phase + 1}.${item + 1}`,
+        description: null,
+        resource_url: null,
+        absolute_date: "2026-10-20",
+        offset_days: null,
+      })),
+    })),
+  };
+
+  const result = parseGeneratedTrack(JSON.stringify(many), input);
+  assert.equal(result.ok, true);
+  assert.equal(result.track.phases.length, 12);
+  assert.equal(result.track.phases[0].items.length, 15);
 });
 
-test("every plan fits inside the schema's phase and step bounds", () => {
-  for (const days of [1, 7, 14, 30, 60, 365, null]) {
-    const scale = planScale(days);
-    assert.ok(scale.phases >= 3 && scale.phases <= 8, `${days} phases`);
-    assert.ok(scale.minSteps >= 2 && scale.maxSteps <= 10, `${days} steps`);
-    assert.ok(scale.phases * scale.maxSteps <= 240, `${days} total`);
-  }
+test("a single phase with a single step is still a course", () => {
+  const small = {
+    track_title: "A short course",
+    description: null,
+    phases: [
+      {
+        title: "One phase",
+        description: null,
+        items: [
+          {
+            title: "One step",
+            description: null,
+            resource_url: null,
+            absolute_date: "2026-10-20",
+            offset_days: null,
+          },
+        ],
+      },
+    ],
+  };
+
+  const result = parseGeneratedTrack(JSON.stringify(small), input);
+  assert.equal(result.ok, true);
+  assert.equal(result.track.phases.length, 1);
 });
 
 /* ── Parsing the outline ────────────────────────────────────────────────── */
@@ -339,8 +413,79 @@ test("an enrichment with a non-web resource url is rejected", () => {
   assert.equal(result.error, "invalid_enrichment");
 });
 
-/* ── Merging the enrichment back in ────────────────────────────────────── */
+/* ── Writing a phase that has any number of steps ──────────────────────── */
 
+test("a short phase is written by one call", () => {
+  const outline = parseOutline(JSON.stringify(makeOutline()), input).outline;
+  const batches = planEnrichmentBatches(outline);
+
+  // Three phases of three steps each, so one call each.
+  assert.equal(batches.length, 3);
+  assert.equal(batches[0].steps.length, 3);
+  assert.equal(batches[0].phaseIndex, 0);
+});
+
+test("a long phase is written by several calls", () => {
+  const long = {
+    track_title: "A long course",
+    description: null,
+    phases: [
+      {
+        title: "One very long phase",
+        description: null,
+        items: Array.from({ length: 30 }, (_, index) => ({
+          title: `Action ${index + 1}`,
+          description: `Do action ${index + 1}.`,
+          resource_url: null,
+          absolute_date: "2026-10-20",
+          offset_days: null,
+        })),
+      },
+    ],
+  };
+
+  const batches = planEnrichmentBatches(long);
+  const expected = Math.ceil(30 / ENRICHMENT_BATCH_STEPS);
+
+  assert.equal(batches.length, expected);
+  assert.ok(batches.every((batch) => batch.steps.length <= ENRICHMENT_BATCH_STEPS));
+  assert.equal(
+    batches.reduce((count, batch) => count + batch.steps.length, 0),
+    30,
+    "no step is dropped between the batches"
+  );
+});
+
+test("a batch keeps the step's own index inside its phase", () => {
+  const long = {
+    track_title: "A long course",
+    description: null,
+    phases: [
+      {
+        title: "One very long phase",
+        description: null,
+        items: Array.from({ length: 30 }, (_, index) => ({
+          title: `Action ${index + 1}`,
+          description: `Do action ${index + 1}.`,
+          resource_url: null,
+          absolute_date: "2026-10-20",
+          offset_days: null,
+        })),
+      },
+    ],
+  };
+
+  const batches = planEnrichmentBatches(long);
+
+  assert.equal(batches[0].steps[0].index, 0);
+  assert.equal(batches[1].steps[0].index, ENRICHMENT_BATCH_STEPS);
+  assert.equal(
+    batches[batches.length - 1].steps[batches[batches.length - 1].steps.length - 1].index,
+    29
+  );
+});
+
+/* ── Merging the enrichment back in ────────────────────────────────────── */
 test("the merge fills in the descriptions and resources", () => {
   const outline = parseOutline(JSON.stringify(makeOutline()), input).outline;
   const enrichment = new Map([

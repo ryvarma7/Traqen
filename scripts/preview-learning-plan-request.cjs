@@ -43,7 +43,7 @@ function loadTs(relative) {
 }
 
 const { learningPlanInputSchema } = loadTs("lib/tracks/contract.ts");
-const { buildOutlineMessages, planScale } = loadTs("lib/tracks/outline.ts");
+const { buildOutlineMessages } = loadTs("lib/tracks/outline.ts");
 const { buildEnrichMessages } = loadTs("lib/tracks/enrich.ts");
 const { buildNvidiaRequestBody } = loadTs("lib/nvidia.ts");
 
@@ -143,7 +143,6 @@ print(
 );
 
 // ── Stage 2: the enrichment ──────────────────────────────────────────────
-const scale = planScale(83);
 const enrichMessages = buildEnrichMessages({
   trackTitle: "Ship a deployed classifier behind a TypeScript API",
   trackDescription:

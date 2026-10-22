@@ -55,20 +55,26 @@ with the server-only `NVIDIA_API_KEY` and the model id in `NVIDIA_MODEL`
   the user message as untrusted plain text.
 - **A plan is generated in two stages.** The *outline* is one reasoned call
   that decides the whole course — its title, its phases, and every step's
-  title, objective and date. The *enrichment* is one small call per phase,
-  written with the reasoning off, that expands each objective into the full
-  why/what/done/check instruction and attaches a resource. The phases are
+  title, objective and date. The *enrichment* is one small call per batch of
+  steps, written with the reasoning off, that expands each objective into the
+  full why/what/done/check instruction and attaches a resource. The batches are
   independent, so they run concurrently.
   Splitting it this way is what makes a much bigger plan affordable: the
   outline's answer is small (one short objective per step) and the expensive
-  per-step prose is written in small, parallel, single-phase calls instead of
-  one enormous call that would run out of time.
-- **How big a plan gets is set by the window.** `lib/tracks/outline.ts` scales
-  the phase and step counts to the number of days available — up to 36 steps
-  for a long course, against the 16 the old single-stage contract asked for.
-  The ceiling is a time budget, not a taste decision: every step costs answer
-  tokens, and the outline shares its output budget with its own reasoning.
-- **The compact retry** re-asks the outline with a smaller plan and the
+  per-step prose is written in small, parallel calls instead of one enormous
+  call that would run out of time.
+- **How big a plan gets is the model's decision.** Nothing in the contract
+  caps the number of phases or the number of steps in a phase: a course can be
+  four phases of three steps or twelve phases of twenty. What bounds a plan is
+  the window it has to fit into and the work the topic actually covers.
+  `lib/tracks/outline.ts` no longer scales the counts to the window — it asks
+  the model to plan the shape, and the window tells the model how much there
+  is room for.
+- **A phase of any size is still written in full.** The enrichment writes a
+  phase's steps in batches of twelve (`ENRICHMENT_BATCH_STEPS`), so a phase
+  with more steps than one call can carry is written by several parallel calls
+  rather than one that would run out of time.
+- **The compact retry** re-asks the outline for a leaner course with the
   reasoning trace off, for the case where the first answer was truncated,
   missed the contract, or ran long.
 - **A failed enrichment costs detail, not the plan.** The enrichment can only

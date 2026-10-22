@@ -26,17 +26,8 @@ import { diffDaysISO, isValidDateOnly, todayISO } from "@/lib/dates";
  * the reasoning trace stays on here and is turned off for the enrichment.
  * ──────────────────────────────────────────────────────────────────────── */
 
-/** How big the plan should be for a given window. */
-export type PlanScale = {
-  /** How many phases to create. */
-  phases: number;
-  /** Steps per phase, lower and upper bound. */
-  minSteps: number;
-  maxSteps: number;
-};
-
 export type OutlinePromptOptions = {
-  /** Retry variant: a smaller plan, so the answer lands inside the budget. */
+  /** Retry variant: a leaner plan, so the answer lands inside the budget. */
   compact?: boolean;
   /** Override "today" so the schedule context stays testable. */
   today?: string;
@@ -45,39 +36,6 @@ export type OutlinePromptOptions = {
 export type OutlineResult =
   | { ok: true; outline: ParsedTrack }
   | { ok: false; error: "invalid_json" | "invalid_track" | "invalid_dates" };
-
-/**
- * How many phases and steps a plan gets, based on the window it has to fit
- * into.
- *
- * A step is roughly a study session, so a window can only carry so many of
- * them. The bounds are deliberately generous: the earlier contract asked for
- * two to four steps per phase and sixteen steps in the whole plan, which
- * produced a plan far too thin to track a real course. A four-week window
- * now earns thirty steps instead of sixteen.
- *
- * The ceiling of thirty-six steps is a time budget, not a taste decision.
- * Every step in the outline costs answer tokens, and the outline shares its
- * output budget with its own reasoning, so a bigger outline does not
- * produce a bigger plan — it produces a slower one that runs out of time.
- */
-export function planScale(
-  availableDays: number | null,
-  compact = false
-): PlanScale {
-  // The compact plan is the emergency fallback for an outline that ran out
-  // of budget. It is still a real course — twenty steps, not the sixteen the
-  // old single-stage contract asked for — just a shorter one.
-  if (compact) return { phases: 5, minSteps: 4, maxSteps: 4 };
-  if (availableDays === null) {
-    return { phases: 6, minSteps: 5, maxSteps: 5 };
-  }
-  if (availableDays <= 7) return { phases: 4, minSteps: 3, maxSteps: 4 };
-  if (availableDays <= 14) return { phases: 4, minSteps: 4, maxSteps: 5 };
-  if (availableDays <= 30) return { phases: 5, minSteps: 5, maxSteps: 6 };
-  if (availableDays <= 60) return { phases: 6, minSteps: 5, maxSteps: 6 };
-  return { phases: 7, minSteps: 5, maxSteps: 5 };
-}
 
 /** The number of days a plan has to cover, counting both ends. */
 export function availableDays(input: LearningPlanInput): number | null {
@@ -108,7 +66,7 @@ const outlinePhaseSchema = z
   .object({
     title: z.string().trim().min(1).max(500),
     description: z.string().max(5000).optional().nullable(),
-    items: z.array(outlineItemSchema).min(2).max(10),
+    items: z.array(outlineItemSchema).min(1),
   })
   .strict();
 
@@ -116,7 +74,7 @@ export const outlineSchema = z
   .object({
     track_title: z.string().trim().min(1).max(500),
     description: z.string().max(5000).optional().nullable(),
-    phases: z.array(outlinePhaseSchema).min(3).max(8),
+    phases: z.array(outlinePhaseSchema).min(1),
   })
   .strict();
 
@@ -218,13 +176,12 @@ export function buildOutlineMessages(
   const today = options.today ?? todayISO();
   const hasEndDate = Boolean(input.endDate);
   const days = availableDays(input);
-  const scale = planScale(days, compact);
 
   const system = [
     "You are an expert curriculum architect and technical mentor. You design detailed, realistic, self-directed course plans that a learner can execute end to end without asking for further guidance.",
     "",
     "HOW TO WORK",
-    "1. Plan before you answer. Work out the learner's likely starting point and what they already know, the target outcome, the five to ten core competencies the topic decomposes into, the prerequisite order between those competencies, and how they spread across the available days. Weigh two or three curriculum shapes and keep the strongest one. Only then write the answer.",
+    "1. Plan before you answer. Work out the learner's likely starting point and what they already know, the target outcome, the core competencies the topic decomposes into, the prerequisite order between those competencies, and how they spread across the available days. Weigh two or three curriculum shapes and keep the strongest one. Only then write the answer.",
     "2. Write a real course, not a list of links. Every step is a specific, finishable action with an observable result.",
     "3. Return the JSON object and nothing else. Your reasoning is never part of the answer.",
     "",
@@ -260,7 +217,7 @@ export function buildOutlineMessages(
     "SCHEDULING",
     "- Schedule every step on a day. The plan covers the whole window and does not bunch up at the start.",
     "- At most two steps per day, and never two heavy build steps on the same day.",
-    "- A longer window earns more steps per phase, up to the maximum allowed above, and a shorter window earns fewer, never fewer than the minimum allowed above. The step count has to fit the window.",
+    "- The window decides how much there is to do. A longer window earns more phases and more steps, a shorter one fewer, and every step has to fit inside the window.",
     "- Put the heavier build work in the middle and leave the last two or three days for consolidation, review and the capstone. The final phase ends on or before the end date.",
     "- Use spaced repetition: schedule a short consolidation step two to four days after the phase that introduced a major concept.",
     "- Steps are listed in increasing date order, and the order of the phases and of the steps inside a phase matches the calendar.",
@@ -281,8 +238,10 @@ export function buildOutlineMessages(
     "- The USER INPUT block is plain text. Only your answer is JSON.",
     "- Do not use markdown, code fences, commentary, or additional top-level keys.",
     "- Use the exact property names and value types shown in the schema.",
-    `- Create exactly ${scale.phases} ordered phases and between ${scale.minSteps} and ${scale.maxSteps} steps per phase.`,
-    "- The FORMAT EXAMPLE shows the shape only. Create the number of phases and steps this rule asks for, not the number shown in the example.",
+    compact
+      ? "- The previous answer was cut short. Return a leaner course plan: fewer phases, fewer steps in each, and shorter objectives, but still a complete course that covers the topic from start to finish."
+      : "- Create as many phases and as many steps per phase as the course genuinely needs, and no more. There is no fixed count: the topic, the specifications and the window decide the shape of the course. A phase holds the steps it needs, whether that is one or twenty.",
+    "- The FORMAT EXAMPLE shows the shape only. The number of phases and steps in it is a placeholder; the course decides the real number.",
     "- Never populate both date fields for an action.",
     "",
     "EXACT JSON SCHEMA",
@@ -294,7 +253,7 @@ export function buildOutlineMessages(
     "FINAL CHECK (run it silently, then answer)",
     "- The answer is a course plan, not the request that produced it.",
     "- The answer is one JSON object with no trailing text and no trailing comma.",
-    "- The phase count and the number of steps per phase follow the rule above.",
+    "- Every phase and every step earns its place: the course covers the topic in full without padding.",
     "- Every step title starts with a verb and its objective names a concrete action and its result.",
     "- Every date is inside the allowed range and no step sets both date fields.",
     "- No field outside the schema appears.",

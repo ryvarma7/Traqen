@@ -19,7 +19,8 @@ import {
   buildEnrichMessages,
   mergeEnrichment,
   parseEnrichment,
-  type EnrichmentPhase,
+  planEnrichmentBatches,
+  type EnrichedStep,
 } from "@/lib/tracks/enrich";
 import { buildOutlineMessages, parseOutline } from "@/lib/tracks/outline";
 
@@ -371,9 +372,11 @@ async function mapWithLimit<T, R>(
 /**
  * Stage 2 — the per-phase enrichment.
  *
- * Every phase is written by its own call, and all of them run at once. A
- * phase whose enrichment fails keeps the outline's objective as its step
- * descriptions, so a plan is always complete and readable: the worst a
+ * Every batch of steps is written by its own call, and all of them run at
+ * once. A phase with more steps than one call can carry is written in
+ * several calls, so a course can hold as many steps as it needs. A batch
+ * whose call fails leaves those steps with the outline's objective as their
+ * description, so a plan is always complete and readable: the worst a
  * failed call leaves behind is a one-line instruction instead of a detailed
  * one.
  */
@@ -381,28 +384,32 @@ async function enrichOutline(
   outline: ParsedTrack,
   input: LearningPlanInput
 ): Promise<ParsedTrack> {
-  const briefs: EnrichmentPhase[] = outline.phases.map((phase) => ({
-    title: phase.title,
-    description: phase.description ?? null,
-    steps: phase.items.map((item, index) => ({
-      index,
-      title: item.title,
-      // The outline's objective is the seed the instruction is written from.
-      objective: item.description ?? item.title,
-    })),
+  // One brief per batch of steps. A batch keeps the step's own index inside
+  // its phase, so the answers merge back into the right place.
+  const batches = planEnrichmentBatches(outline);
+  const briefs = batches.map((batch) => ({
+    phaseIndex: batch.phaseIndex,
+    indexes: batch.steps.map((step) => step.index),
+    brief: {
+      title: outline.phases[batch.phaseIndex].title,
+      description: outline.phases[batch.phaseIndex].description ?? null,
+      steps: batch.steps,
+    },
   }));
 
-  const results = await mapWithLimit(briefs, ENRICH_CONCURRENCY, async (phase, index) => {
+  const results = await mapWithLimit(briefs, ENRICH_CONCURRENCY, async (entry, index) => {
     if (index > 0) {
+      // The stagger is bounded by the number of calls in flight, so a plan
+      // with many batches does not push the last one minutes into the wait.
       await new Promise((resolve) =>
-        setTimeout(resolve, ENRICH_STAGGER_MS * index)
+        setTimeout(resolve, ENRICH_STAGGER_MS * (index % ENRICH_CONCURRENCY))
       );
     }
     const { system, user } = buildEnrichMessages({
       trackTitle: outline.track_title,
       trackDescription: outline.description ?? null,
       topic: input.topic,
-      phase,
+      phase: entry.brief,
     });
     const raw = await generateNvidiaText(user, {
       system,
@@ -414,18 +421,35 @@ async function enrichOutline(
     const parsed = parseEnrichment(raw);
     if (!parsed.ok) {
       console.warn("NVIDIA NIM learning plan enrichment did not match the contract", {
-        phase: phase.title,
+        phase: entry.brief.title,
         reason: parsed.error,
         responseLength: raw.length,
       });
       return null;
     }
-    return parsed.steps;
+    // Keep only the steps this batch was given: a model that answered for
+    // more than it was asked about must not write another batch's steps.
+    const allowed = new Set(entry.indexes);
+    return new Map(
+      [...parsed.steps].filter(([stepIndex]) => allowed.has(stepIndex))
+    );
+  });
+
+  // Fold the batches back into one map of answers per phase.
+  const perPhase: Array<Map<number, EnrichedStep>> = outline.phases.map(
+    () => new Map()
+  );
+  briefs.forEach((entry, index) => {
+    const result = results[index];
+    if (result.status !== "fulfilled" || !result.value) return;
+    for (const [stepIndex, step] of result.value) {
+      perPhase[entry.phaseIndex].set(stepIndex, step);
+    }
   });
 
   const { track, failedPhases } = mergeEnrichment(
     outline,
-    results.map((result) => (result.status === "fulfilled" ? result.value : null))
+    perPhase.map((steps) => (steps.size > 0 ? steps : null))
   );
 
   const stepCount = track.phases.reduce((count, phase) => count + phase.items.length, 0);
@@ -452,6 +476,14 @@ export async function generateLearningPlan(
 
   const parsedInput = learningPlanInputSchema.safeParse(input);
   if (!parsedInput.success) {
+    // The form holds itself to the same limits, so this is a backstop — but
+    // it is the one failure the learner only sees as a generic message, so
+    // the field that was rejected is worth having in the log.
+    console.warn("Learning plan input was rejected", {
+      issues: parsedInput.error.issues
+        .slice(0, 5)
+        .map((issue) => `${issue.path.join(".") || "input"}: ${issue.message}`),
+    });
     return {
       error: "Enter a topic and a valid start date. The end date is optional.",
       code: "INVALID_INPUT",

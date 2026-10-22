@@ -15,15 +15,27 @@ import {
  * step is explained: it expands a one-line objective into the full
  * why / what / done / check instruction, and attaches a resource.
  *
- * One call per phase, all of them in parallel. That is what makes a much
- * bigger plan affordable — a call that writes six steps is small enough to
- * answer quickly and without reasoning, and six of them cost one call's
- * wall-clock time rather than six.
+ * One call per batch of steps, all of them in parallel. That is what makes a
+ * much bigger plan affordable — a call that writes twelve steps is small
+ * enough to answer quickly and without reasoning, and a dozen of them cost
+ * one call's wall-clock time rather than a dozen. A phase with more steps
+ * than one call can carry is written in several calls, so no phase is ever
+ * too big to be written.
  *
  * The stage can only add detail. It returns a description and a resource
  * per step; it cannot move a step, rename it, or change its date, because
  * none of those are in the shape it is allowed to answer with.
  * ──────────────────────────────────────────────────────────────────────── */
+
+/**
+ * How many steps one enrichment call writes.
+ *
+ * A phase holds as many steps as the course needs, so a long phase is
+ * written in several small calls rather than one that would not fit in the
+ * time budget. A call that writes twelve steps answers quickly and without
+ * reasoning, and the calls run side by side.
+ */
+export const ENRICHMENT_BATCH_STEPS = 12;
 
 /** A step as the enrichment stage is given it. */
 export type EnrichmentStep = {
@@ -70,9 +82,55 @@ const enrichedStepSchema = z
 
 const enrichmentSchema = z
   .object({
-    steps: z.array(enrichedStepSchema).min(1).max(20),
+    steps: z.array(enrichedStepSchema).min(1).max(ENRICHMENT_BATCH_STEPS * 2),
   })
   .strict();
+
+/**
+ * One batch of steps, and the phase it belongs to.
+ *
+ * A batch keeps the step's own index inside its phase, so the answers merge
+ * back into the right place whatever order the calls come back in.
+ */
+export type EnrichmentBatch = {
+  /** Which phase of the course the batch belongs to. */
+  phaseIndex: number;
+  /** The steps the call is asked to write, with their indexes. */
+  steps: EnrichmentStep[];
+};
+
+/**
+ * Splits a course's steps into the batches the enrichment calls write.
+ *
+ * A phase with more steps than one call can carry is written in several
+ * calls, so a course can hold as many steps as it needs. The steps of a
+ * phase stay in order and keep their own index, so nothing is lost between
+ * the batches.
+ */
+export function planEnrichmentBatches(
+  track: ParsedTrack,
+  batchSize: number = ENRICHMENT_BATCH_STEPS
+): EnrichmentBatch[] {
+  const batches: EnrichmentBatch[] = [];
+
+  track.phases.forEach((phase, phaseIndex) => {
+    const steps = phase.items.map((item, index) => ({
+      index,
+      title: item.title,
+      // The outline's objective is the seed the instruction is written from.
+      objective: item.description ?? item.title,
+    }));
+
+    for (let start = 0; start < steps.length; start += batchSize) {
+      batches.push({
+        phaseIndex,
+        steps: steps.slice(start, start + batchSize),
+      });
+    }
+  });
+
+  return batches;
+}
 
 /**
  * Builds the two chat messages one phase's enrichment runs on.
@@ -111,7 +169,7 @@ export function buildEnrichMessages(
     "OUTPUT RULES",
     "- Return exactly one JSON object and nothing else.",
     "- Return one entry per step you were given, in the same order, with the same index.",
-    "- The index is the position of the step in the list you were given, counting from 0.",
+    "- The index is the number shown beside each step in the list you were given, unchanged.",
     "- Do not rewrite, reorder, extend or remove the steps.",
     "- Use null for resource_url when no trustworthy resource exists.",
     "- Do not use markdown, code fences, commentary, or additional top-level keys.",

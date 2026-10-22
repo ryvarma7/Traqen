@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { diffDaysISO, isValidDateOnly } from "@/lib/dates";
+import { LEARNING_PLAN_LIMITS } from "@/lib/tracks/limits";
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Learning-track contract.
@@ -21,9 +22,9 @@ const dateOnlySchema = z
 
 export const learningPlanInputSchema = z
   .object({
-    topic: z.string().trim().min(1).max(200),
-    specs: z.string().trim().max(4000),
-    timeframe: z.string().trim().max(200),
+    topic: z.string().trim().min(1).max(LEARNING_PLAN_LIMITS.topic),
+    specs: z.string().trim().max(LEARNING_PLAN_LIMITS.specs),
+    timeframe: z.string().trim().max(LEARNING_PLAN_LIMITS.timeframe),
     startDate: dateOnlySchema,
     endDate: dateOnlySchema.optional().nullable(),
   })
@@ -89,34 +90,31 @@ const itemSchema = z.object({
 const phaseSchema = z.object({
   title: z.string().trim().min(1).max(500),
   description: z.string().max(5000).optional().nullable(),
-  items: z.array(itemSchema).min(2).max(10),
+  items: z.array(itemSchema).min(1),
 }).strict();
 
-const MAX_TOTAL_ITEMS = 240;
-const MAX_INPUT_LENGTH = 250_000;
-
+/**
+ * The shape of a course.
+ *
+ * There is no ceiling on how many phases a course has or how many steps a
+ * phase holds: the plan is the learner's, and a course can be four phases of
+ * three steps or twelve phases of twenty. What bounds a plan is the window
+ * it has to fit into and the work the course actually covers — not a number
+ * written down here.
+ */
 export const trackSchema = z
   .object({
     track_title: z.string().trim().min(1).max(500),
     description: z.string().max(5000).optional().nullable(),
-    phases: z.array(phaseSchema).min(3).max(8),
+    phases: z.array(phaseSchema).min(1),
   })
-  .strict()
-  .superRefine((track, ctx) => {
-    const itemCount = track.phases.reduce((count, phase) => count + phase.items.length, 0);
-    if (itemCount > MAX_TOTAL_ITEMS) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.too_big,
-        maximum: MAX_TOTAL_ITEMS,
-        type: "array",
-        inclusive: true,
-        path: ["phases"],
-        message: `A track can contain at most ${MAX_TOTAL_ITEMS} steps`,
-      });
-    }
-  });
+  .strict();
 
 export type ParsedTrack = z.infer<typeof trackSchema>;
+
+/** A guard on the size of a raw model response, well above what the output
+ *  budget can produce. */
+const MAX_INPUT_LENGTH = 250_000;
 
 export type GeneratedTrackResult =
   | { ok: true; track: ParsedTrack }

@@ -23,6 +23,7 @@ import {
   importTrack,
 } from "@/lib/actions/tracks";
 import type { ParsedTrack } from "@/lib/tracks/contract";
+import { LEARNING_PLAN_LIMITS } from "@/lib/tracks/limits";
 import { haptics } from "@/lib/haptics";
 import { blurIn, blurInTransition } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,8 @@ type QuotaState = {
 
 type FieldErrors = {
   topic?: string;
+  specs?: string;
+  timeframe?: string;
   dates?: string;
 };
 
@@ -250,6 +253,18 @@ export function ImportTrackModal({  open,
     setErrorMessage(null);
   };
 
+  const setSpecsValue = (value: string) => {
+    setSpecs(value);
+    setFieldErrors((current) => ({ ...current, specs: undefined }));
+    setErrorMessage(null);
+  };
+
+  const setTimeframeValue = (value: string) => {
+    setTimeframe(value);
+    setFieldErrors((current) => ({ ...current, timeframe: undefined }));
+    setErrorMessage(null);
+  };
+
   const setStartDateValue = (value: string) => {
     setStartDate(value);
     setFieldErrors((current) => ({ ...current, dates: undefined }));
@@ -262,9 +277,31 @@ export function ImportTrackModal({  open,
     setErrorMessage(null);
   };
 
+  /**
+   * The same limits the server holds the input to, checked here so the
+   * learner is told *which* field is wrong. The server's answer to a
+   * rejected form is one generic message — "check your topic and dates" —
+   * which sends people looking in the wrong box.
+   */
   const validateDetails = (): boolean => {
     const nextErrors: FieldErrors = {};
-    if (!topic.trim()) nextErrors.topic = "Tell us what you want to learn.";
+    const trimmedTopic = topic.trim();
+    const trimmedSpecs = specs.trim();
+    const trimmedTimeframe = timeframe.trim();
+
+    if (!trimmedTopic) {
+      nextErrors.topic = "Tell us what you want to learn.";
+    } else if (trimmedTopic.length > LEARNING_PLAN_LIMITS.topic) {
+      nextErrors.topic = `Keep the topic under ${LEARNING_PLAN_LIMITS.topic.toLocaleString()} characters.`;
+    }
+
+    if (trimmedSpecs.length > LEARNING_PLAN_LIMITS.specs) {
+      nextErrors.specs = `The specifications are over the ${LEARNING_PLAN_LIMITS.specs.toLocaleString()} character limit.`;
+    }
+
+    if (trimmedTimeframe.length > LEARNING_PLAN_LIMITS.timeframe) {
+      nextErrors.timeframe = `Keep the time frame under ${LEARNING_PLAN_LIMITS.timeframe.toLocaleString()} characters.`;
+    }
 
     if (!startDate) {
       nextErrors.dates = "Choose a start date.";
@@ -275,7 +312,13 @@ export function ImportTrackModal({  open,
     setFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
       haptics.error();
-      toast.error(nextErrors.topic ?? nextErrors.dates ?? "Check the required fields.");
+      toast.error(
+        nextErrors.topic ??
+          nextErrors.specs ??
+          nextErrors.timeframe ??
+          nextErrors.dates ??
+          "Check the required fields."
+      );
       return false;
     }
     return true;
@@ -452,12 +495,20 @@ export function ImportTrackModal({  open,
                     id="trk-topic"
                     value={topic}
                     onChange={(event) => setTopicValue(event.target.value)}
+                    maxLength={LEARNING_PLAN_LIMITS.topic}
                     placeholder="e.g. Web development, machine learning, piano…"
                     className={cn(inputClass, fieldErrors.topic && "border-danger/70")}
                     aria-invalid={Boolean(fieldErrors.topic)}
-                    aria-describedby={fieldErrors.topic ? "trk-topic-error" : undefined}
+                    aria-describedby="trk-topic-count"
                     autoComplete="off"
                   />
+                  <p
+                    id="trk-topic-count"
+                    className="mt-1 text-right font-mono text-2xs tabular-nums text-muted-foreground/70"
+                  >
+                    {topic.length.toLocaleString()} /{" "}
+                    {LEARNING_PLAN_LIMITS.topic.toLocaleString()}
+                  </p>
                   {fieldErrors.topic && (
                     <p id="trk-topic-error" className="mt-1 text-2xs text-danger">
                       {fieldErrors.topic}
@@ -472,11 +523,37 @@ export function ImportTrackModal({  open,
                   <textarea
                     id="trk-specs"
                     value={specs}
-                    onChange={(event) => setSpecs(event.target.value)}
+                    onChange={(event) => setSpecsValue(event.target.value)}
+                    maxLength={LEARNING_PLAN_LIMITS.specs}
                     placeholder="e.g. 2 hrs/day, focus on React, include projects…"
                     rows={3}
-                    className={cn(inputClass, "resize-y leading-relaxed")}
+                    className={cn(
+                      inputClass,
+                      "resize-y leading-relaxed",
+                      fieldErrors.specs && "border-danger/70"
+                    )}
+                    aria-invalid={Boolean(fieldErrors.specs)}
+                    aria-describedby="trk-specs-count"
                   />
+                  {/* The count is here so a paste that runs into the limit is
+                      visible rather than silently cut short. */}
+                  <p
+                    id="trk-specs-count"
+                    className={cn(
+                      "mt-1 text-right font-mono text-2xs tabular-nums",
+                      specs.length >= LEARNING_PLAN_LIMITS.specs
+                        ? "text-warning"
+                        : "text-muted-foreground/70"
+                    )}
+                  >
+                    {specs.length.toLocaleString()} /{" "}
+                    {LEARNING_PLAN_LIMITS.specs.toLocaleString()}
+                  </p>
+                  {fieldErrors.specs && (
+                    <p id="trk-specs-error" className="mt-1 text-2xs text-danger">
+                      {fieldErrors.specs}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -486,11 +563,16 @@ export function ImportTrackModal({  open,
                   <input
                     id="trk-time"
                     value={timeframe}
-                    onChange={(event) => setTimeframe(event.target.value)}
+                    onChange={(event) => setTimeframeValue(event.target.value)}
+                    maxLength={LEARNING_PLAN_LIMITS.timeframe}
                     placeholder="e.g. 6 weeks, 3 months, or exam-ready"
-                    className={inputClass}
+                    className={cn(inputClass, fieldErrors.timeframe && "border-danger/70")}
+                    aria-invalid={Boolean(fieldErrors.timeframe)}
                     autoComplete="off"
                   />
+                  {fieldErrors.timeframe && (
+                    <p className="mt-1 text-2xs text-danger">{fieldErrors.timeframe}</p>
+                  )}
                 </div>
 
                 <fieldset>

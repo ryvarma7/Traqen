@@ -55,7 +55,7 @@ function loadTs(relative) {
 
 const { generateNvidiaText } = loadTs("lib/nvidia.ts");
 const { learningPlanInputSchema, trackSchema } = loadTs("lib/tracks/contract.ts");
-const { buildOutlineMessages, parseOutline, planScale } = loadTs("lib/tracks/outline.ts");
+const { buildOutlineMessages, parseOutline } = loadTs("lib/tracks/outline.ts");
 const { buildEnrichMessages, mergeEnrichment, parseEnrichment } = loadTs("lib/tracks/enrich.ts");
 
 // The same budgets the action uses.
@@ -73,9 +73,8 @@ const input = learningPlanInputSchema.parse({
   endDate: "2027-01-11",
 });
 
-const scale = planScale(83);
 console.log(
-  `Plan size for a 12-week window: ${scale.phases} phases, ${scale.minSteps}-${scale.maxSteps} steps per phase (${scale.phases * scale.minSteps}-${scale.phases * scale.maxSteps} steps).`
+  `Plan size for a 12-week window: the model decides — the window and the topic set the shape.`
 );
 console.log("");
 
