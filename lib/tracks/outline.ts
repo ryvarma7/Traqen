@@ -10,6 +10,7 @@ import {
   type ParsedTrack,
 } from "@/lib/tracks/contract";
 import { diffDaysISO, isValidDateOnly, todayISO } from "@/lib/dates";
+import { LEARNING_PLAN_LIMITS } from "@/lib/tracks/limits";
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Stage 1 — the outline.
@@ -66,7 +67,7 @@ const outlinePhaseSchema = z
   .object({
     title: z.string().trim().min(1).max(500),
     description: z.string().max(5000).optional().nullable(),
-    items: z.array(outlineItemSchema).min(1),
+    items: z.array(outlineItemSchema).min(1).max(LEARNING_PLAN_LIMITS.maxItemsPerPhase),
   })
   .strict();
 
@@ -74,9 +75,22 @@ export const outlineSchema = z
   .object({
     track_title: z.string().trim().min(1).max(500),
     description: z.string().max(5000).optional().nullable(),
-    phases: z.array(outlinePhaseSchema).min(1),
+    phases: z.array(outlinePhaseSchema).min(1).max(LEARNING_PLAN_LIMITS.maxPhases),
   })
-  .strict();
+  .strict()
+  .superRefine((outline, ctx) => {
+    const itemCount = outline.phases.reduce((count, phase) => count + phase.items.length, 0);
+    if (itemCount > LEARNING_PLAN_LIMITS.maxItems) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.too_big,
+        origin: "array",
+        maximum: LEARNING_PLAN_LIMITS.maxItems,
+        inclusive: true,
+        path: ["phases"],
+        message: `A plan cannot contain more than ${LEARNING_PLAN_LIMITS.maxItems} steps`,
+      });
+    }
+  });
 
 /**
  * Structural example of the outline. It is generated from a literal so the

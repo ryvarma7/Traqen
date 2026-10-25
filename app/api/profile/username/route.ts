@@ -6,7 +6,10 @@ import { readProfile } from "@/lib/supabase/profile";
 export async function PATCH(request: Request) {
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) {
-    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+    return NextResponse.json(
+      { error: "We couldn't process that request. Please try again." },
+      { status: 403 }
+    );
   }
 
   const supabase = await createClient();
@@ -17,14 +20,20 @@ export async function PATCH(request: Request) {
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Your session has expired. Please sign in again." },
+      { status: 401 }
+    );
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json(
+      { error: "We couldn't process that request. Please try again." },
+      { status: 400 }
+    );
   }
 
   const parsed = usernameSchema.safeParse(body);

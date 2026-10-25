@@ -192,14 +192,14 @@ test("the compact retry asks for a leaner course rather than a fixed count", () 
   assert.doesNotMatch(system, /Create exactly \d+ ordered phases/);
 });
 
-test("a plan may hold as many phases and steps as it needs", () => {
+test("a plan may use the full safe generation envelope", () => {
   const many = {
     track_title: "A long course",
     description: null,
-    phases: Array.from({ length: 12 }, (_, phase) => ({
+    phases: Array.from({ length: LEARNING_PLAN_LIMITS.maxPhases }, (_, phase) => ({
       title: `Phase ${phase + 1}`,
       description: null,
-      items: Array.from({ length: 15 }, (_, item) => ({
+      items: Array.from({ length: LEARNING_PLAN_LIMITS.maxItems / LEARNING_PLAN_LIMITS.maxPhases }, (_, item) => ({
         title: `Action ${phase + 1}.${item + 1}`,
         description: null,
         resource_url: null,
@@ -211,8 +211,47 @@ test("a plan may hold as many phases and steps as it needs", () => {
 
   const result = parseGeneratedTrack(JSON.stringify(many), input);
   assert.equal(result.ok, true);
-  assert.equal(result.track.phases.length, 12);
-  assert.equal(result.track.phases[0].items.length, 15);
+  assert.equal(result.track.phases.length, LEARNING_PLAN_LIMITS.maxPhases);
+  assert.equal(
+    result.track.phases[0].items.length,
+    LEARNING_PLAN_LIMITS.maxItems / LEARNING_PLAN_LIMITS.maxPhases
+  );
+});
+
+test("a plan above the safe generation budget is rejected", () => {
+  const many = {
+    track_title: "An oversized course",
+    description: null,
+    phases: Array.from({ length: LEARNING_PLAN_LIMITS.maxPhases }, (_, phase) => ({
+      title: `Phase ${phase + 1}`,
+      description: null,
+      items: Array.from({ length: LEARNING_PLAN_LIMITS.maxItemsPerPhase }, (_, item) => ({
+        title: `Action ${phase + 1}.${item + 1}`,
+        description: null,
+        resource_url: null,
+        absolute_date: "2026-10-20",
+        offset_days: null,
+      })),
+    })),
+  };
+
+  const overLimit = structuredClone(many);
+  overLimit.phases.push({
+    title: "Too many phases",
+    description: null,
+    items: [
+      {
+        title: "One extra action",
+        description: null,
+        resource_url: null,
+        absolute_date: "2026-10-20",
+        offset_days: null,
+      },
+    ],
+  });
+
+  assert.equal(parseGeneratedTrack(JSON.stringify(many), input).ok, false);
+  assert.equal(parseGeneratedTrack(JSON.stringify(overLimit), input).ok, false);
 });
 
 test("a single phase with a single step is still a course", () => {

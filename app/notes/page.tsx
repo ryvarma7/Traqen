@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { PageTransition } from "@/components/shell/page-transition";
 import { NotesView } from "@/components/notes/notes-view";
 import { createClient } from "@/lib/supabase/server";
+import { requireAuthData, requireQueryData } from "@/lib/supabase/query";
 
 export const dynamic = "force-dynamic";
 
@@ -17,12 +18,13 @@ export default async function NotesPage() {
       .order("updated_at", { ascending: false }),
   ]);
 
-  if (!userRes.data.user) redirect("/login");
+  const auth = requireAuthData(userRes, "notes auth");
+  if (!auth.user) redirect("/login");
 
   return (
     <>
       <PageTransition>
-        <NotesView notes={notesRes.data ?? []} />
+        <NotesView notes={requireQueryData(notesRes, "notes")} />
       </PageTransition>
     </>
   );

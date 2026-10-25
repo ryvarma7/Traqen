@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { PageTransition } from "@/components/shell/page-transition";
 import { TasksView } from "@/components/tasks/tasks-view";
 import { createClient } from "@/lib/supabase/server";
+import { requireAuthData, requireQueryData } from "@/lib/supabase/query";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +17,13 @@ export default async function TasksPage() {
       .select("id, title, description, notes, status, priority, due_date, category, related_type, related_name"),
   ]);
 
-  if (!userRes.data.user) redirect("/login");
+  const auth = requireAuthData(userRes, "tasks auth");
+  if (!auth.user) redirect("/login");
 
   return (
     <>
       <PageTransition>
-        <TasksView tasks={tasksRes.data ?? []} />
+        <TasksView tasks={requireQueryData(tasksRes, "tasks")} />
       </PageTransition>
     </>
   );

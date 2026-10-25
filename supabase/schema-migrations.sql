@@ -26,6 +26,356 @@ alter table public.job_applications add column if not exists next_action text;
 alter table public.hackathons add column if not exists team_status text;
 alter table public.hackathons add column if not exists submission_link text;
 alter table public.learning_tracks add column if not exists end_date date;
+alter table public.job_applications add column if not exists application_link text;
+alter table public.hackathons add column if not exists application_link text;
+alter table public.hackathons add column if not exists project_link text;
+alter table public.track_items add column if not exists resource_url text;
+
+-- Enforce the current value vocabulary for new writes without requiring a
+-- destructive cleanup of historical rows. NOT VALID constraints still check
+-- every insert/update; a later data-cleanup pass may validate them in place.
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'job_applications_status_check') then
+    alter table public.job_applications add constraint job_applications_status_check
+      check (status is null or status in ('Saved','Applied','Interview','Shortlisted','Offer','Rejected','Withdrawn')) not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'job_applications_priority_check') then
+    alter table public.job_applications add constraint job_applications_priority_check
+      check (priority is null or priority in ('High','Medium','Low')) not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'hackathons_status_check') then
+    alter table public.hackathons add constraint hackathons_status_check
+      check (status is null or status in ('Saved','Applied','Shortlisted','In progress','Winner','Not selected','Withdrawn')) not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'hackathons_priority_check') then
+    alter table public.hackathons add constraint hackathons_priority_check
+      check (priority is null or priority in ('High','Medium','Low')) not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'tasks_priority_check') then
+    alter table public.tasks add constraint tasks_priority_check
+      check (priority is null or priority in ('High','Medium','Low')) not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'notes_color_check') then
+    alter table public.notes add constraint notes_color_check
+      check (color is null or color in ('gray','red','orange','amber','green','blue','violet')) not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'learning_tracks_date_range') then
+    alter table public.learning_tracks add constraint learning_tracks_date_range
+      check (end_date is null or end_date >= start_date) not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'track_phases_position_check') then
+    alter table public.track_phases add constraint track_phases_position_check
+      check (position >= 0) not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'track_items_position_check') then
+    alter table public.track_items add constraint track_items_position_check
+      check (position >= 0) not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'dropdown_field_name_check') then
+    alter table public.dropdown_options add constraint dropdown_field_name_check check (
+      (section = 'jobs' and field_name in ('role_type','location_mode','source'))
+      or
+      (section = 'hackathons' and field_name in ('type','purpose','theme_track','mode','source'))
+    ) not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'job_applications_application_link_check') then
+    alter table public.job_applications add constraint job_applications_application_link_check
+      check (application_link is null or application_link ~* '^https?://[^[:space:]]+$') not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'hackathons_application_link_check') then
+    alter table public.hackathons add constraint hackathons_application_link_check
+      check (application_link is null or application_link ~* '^https?://[^[:space:]]+$') not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'hackathons_project_link_check') then
+    alter table public.hackathons add constraint hackathons_project_link_check
+      check (project_link is null or project_link ~* '^https?://[^[:space:]]+$') not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'track_items_resource_url_check') then
+    alter table public.track_items add constraint track_items_resource_url_check
+      check (resource_url is null or resource_url ~* '^https?://[^[:space:]]+$') not valid;
+  end if;
+end
+$$;
+
+-- Transactional track mutations. These functions are SECURITY INVOKER so the
+-- authenticated caller's RLS policies remain active inside every transaction.
+create or replace function public.create_learning_track(
+  p_title text,
+  p_description text,
+  p_start_date date,
+  p_end_date date,
+  p_phases jsonb
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_track_id uuid;
+  v_phase_id uuid;
+  v_phase jsonb;
+  v_item jsonb;
+  v_items jsonb;
+  v_title text;
+  v_description text;
+  v_resource_url text;
+  v_target_date date;
+  v_phase_index integer;
+  v_item_index integer;
+  v_total_items integer := 0;
+begin
+  if v_user_id is null then raise exception 'Not authenticated' using errcode = '42501'; end if;
+  if p_title is null or char_length(btrim(p_title)) < 1 or char_length(p_title) > 500 then
+    raise exception 'Invalid track title' using errcode = '22023';
+  end if;
+  if p_description is not null and char_length(p_description) > 5000 then
+    raise exception 'Invalid track description' using errcode = '22023';
+  end if;
+  if p_end_date is not null and p_end_date < p_start_date then
+    raise exception 'Invalid track date range' using errcode = '22023';
+  end if;
+  if p_phases is null or jsonb_typeof(p_phases) is distinct from 'array'
+     or jsonb_array_length(p_phases) < 1 or jsonb_array_length(p_phases) > 12 then
+    raise exception 'Invalid track phase count' using errcode = '22023';
+  end if;
+
+  insert into public.learning_tracks (user_id, title, description, start_date, end_date, status)
+  values (v_user_id, btrim(p_title), nullif(p_description, ''), p_start_date, p_end_date, 'In progress')
+  returning id into v_track_id;
+
+  for v_phase_index in 0..jsonb_array_length(p_phases) - 1 loop
+    v_phase := p_phases -> v_phase_index;
+    v_title := v_phase ->> 'title';
+    v_description := nullif(v_phase ->> 'description', '');
+    v_items := v_phase -> 'items';
+    if jsonb_typeof(v_phase) is distinct from 'object'
+       or v_title is null or char_length(btrim(v_title)) < 1 or char_length(v_title) > 500
+       or (v_description is not null and char_length(v_description) > 5000)
+       or v_items is null or jsonb_typeof(v_items) is distinct from 'array'
+       or jsonb_array_length(v_items) < 1 or jsonb_array_length(v_items) > 16 then
+      raise exception 'Invalid track phase' using errcode = '22023';
+    end if;
+    v_total_items := v_total_items + jsonb_array_length(v_items);
+    if v_total_items > 96 then raise exception 'Track contains too many steps' using errcode = '22023'; end if;
+
+    insert into public.track_phases (track_id, user_id, position, title, description)
+    values (v_track_id, v_user_id, v_phase_index, btrim(v_title), v_description)
+    returning id into v_phase_id;
+
+    for v_item_index in 0..jsonb_array_length(v_items) - 1 loop
+      v_item := v_items -> v_item_index;
+      v_title := v_item ->> 'title';
+      v_description := nullif(v_item ->> 'description', '');
+      v_resource_url := nullif(btrim(v_item ->> 'resource_url'), '');
+      v_target_date := null;
+      if jsonb_typeof(v_item) is distinct from 'object'
+         or v_title is null or char_length(btrim(v_title)) < 1 or char_length(v_title) > 500
+         or (v_description is not null and char_length(v_description) > 5000)
+         or (v_resource_url is not null and (char_length(v_resource_url) > 2000 or v_resource_url !~* '^https?://[^[:space:]]+$')) then
+        raise exception 'Invalid track step' using errcode = '22023';
+      end if;
+      if nullif(v_item ->> 'target_date', '') is not null then
+        v_target_date := (v_item ->> 'target_date')::date;
+        if v_target_date < p_start_date or (p_end_date is not null and v_target_date > p_end_date) then
+          raise exception 'Track step is outside the plan window' using errcode = '22023';
+        end if;
+      end if;
+      insert into public.track_items (
+        track_id, phase_id, user_id, position, title, description, resource_url, target_date, status
+      ) values (
+        v_track_id, v_phase_id, v_user_id, v_item_index, btrim(v_title), v_description,
+        v_resource_url, v_target_date, 'To do'
+      );
+    end loop;
+  end loop;
+  return v_track_id;
+end;
+$$;
+
+create or replace function public.reschedule_learning_track(p_track_id uuid, p_new_start date)
+returns table (moved integer, delta integer)
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_first_date date;
+  v_delta integer;
+  v_moved integer;
+begin
+  if v_user_id is null then raise exception 'Not authenticated' using errcode = '42501'; end if;
+  if not exists (select 1 from public.learning_tracks where id = p_track_id and user_id = v_user_id) then
+    raise exception 'Track not found' using errcode = 'P0002';
+  end if;
+  select min(target_date) into v_first_date from public.track_items
+   where track_id = p_track_id and user_id = v_user_id and status <> 'Done' and target_date is not null;
+  if v_first_date is null then return query select 0, 0; return; end if;
+  v_delta := p_new_start - v_first_date;
+  if v_delta = 0 then
+    select count(*)::integer into v_moved from public.track_items
+     where track_id = p_track_id and user_id = v_user_id and status <> 'Done' and target_date is not null;
+    return query select v_moved, 0; return;
+  end if;
+  update public.track_items set target_date = target_date + v_delta, updated_at = now()
+   where track_id = p_track_id and user_id = v_user_id and status <> 'Done' and target_date is not null;
+  get diagnostics v_moved = row_count;
+  return query select v_moved, v_delta;
+end;
+$$;
+
+create or replace function public.set_track_item_status(p_item_id uuid, p_status text)
+returns table (track_id uuid)
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_track_id uuid;
+  v_item_count integer;
+  v_done boolean;
+begin
+  if v_user_id is null then raise exception 'Not authenticated' using errcode = '42501'; end if;
+  if p_status not in ('To do', 'In progress', 'Done') then
+    raise exception 'Invalid track step status' using errcode = '22023';
+  end if;
+  select i.track_id into v_track_id from public.track_items i where i.id = p_item_id and i.user_id = v_user_id;
+  if not found then raise exception 'Track step not found' using errcode = 'P0002'; end if;
+  update public.track_items set status = p_status, updated_at = now() where id = p_item_id and user_id = v_user_id;
+  select count(*)::integer, coalesce(bool_and(status = 'Done'), false) into v_item_count, v_done
+    from public.track_items where track_id = v_track_id and user_id = v_user_id;
+  update public.learning_tracks
+     set status = case when v_item_count > 0 and v_done then 'Completed' else 'In progress' end,
+         updated_at = now()
+   where id = v_track_id and user_id = v_user_id and status <> 'On hold';
+  return query select v_track_id;
+end;
+$$;
+
+create or replace function public.reorder_track_items(p_item_id uuid, p_direction text)
+returns table (moved boolean, track_id uuid)
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_track_id uuid;
+  v_phase_id uuid;
+  v_order uuid[];
+  v_index integer;
+  v_position integer;
+  v_tmp uuid;
+begin
+  if v_user_id is null then raise exception 'Not authenticated' using errcode = '42501'; end if;
+  if p_direction not in ('up', 'down') then raise exception 'Invalid move direction' using errcode = '22023'; end if;
+  select i.track_id, i.phase_id into v_track_id, v_phase_id
+    from public.track_items i where i.id = p_item_id and i.user_id = v_user_id;
+  if not found then raise exception 'Track step not found' using errcode = 'P0002'; end if;
+  select array_agg(i.id order by i.position, i.id) into v_order
+    from public.track_items i where i.phase_id = v_phase_id and i.user_id = v_user_id;
+  v_index := array_position(v_order, p_item_id);
+  if p_direction = 'up' and v_index = 1 then return query select false, v_track_id; return; end if;
+  if p_direction = 'down' and v_index = array_length(v_order, 1) then return query select false, v_track_id; return; end if;
+  v_position := case when p_direction = 'up' then v_index - 1 else v_index + 1 end;
+  v_tmp := v_order[v_position];
+  v_order[v_position] := v_order[v_index];
+  v_order[v_index] := v_tmp;
+  for v_position in 1..array_length(v_order, 1) loop
+    update public.track_items set position = v_position - 1, updated_at = now()
+     where id = v_order[v_position] and phase_id = v_phase_id and user_id = v_user_id;
+  end loop;
+  return query select true, v_track_id;
+end;
+$$;
+
+create or replace function public.move_track_item_to_phase(p_item_id uuid, p_phase_id uuid)
+returns table (moved boolean, track_id uuid)
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_track_id uuid;
+  v_old_phase_id uuid;
+  v_position integer;
+begin
+  if v_user_id is null then raise exception 'Not authenticated' using errcode = '42501'; end if;
+  select i.track_id, i.phase_id into v_track_id, v_old_phase_id
+    from public.track_items i where i.id = p_item_id and i.user_id = v_user_id;
+  if not found then raise exception 'Track step not found' using errcode = 'P0002'; end if;
+  if v_old_phase_id = p_phase_id then return query select false, v_track_id; return; end if;
+  if not exists (
+    select 1 from public.track_phases p where p.id = p_phase_id and p.track_id = v_track_id and p.user_id = v_user_id
+  ) then raise exception 'Target phase not found' using errcode = 'P0002'; end if;
+  select coalesce(max(i.position), -1) + 1 into v_position
+    from public.track_items i where i.phase_id = p_phase_id and i.user_id = v_user_id;
+  update public.track_items set phase_id = p_phase_id, position = v_position, updated_at = now()
+   where id = p_item_id and user_id = v_user_id;
+  with ordered as (
+    select i.id, (row_number() over (order by i.position, i.id) - 1)::integer as new_position
+      from public.track_items i where i.phase_id = v_old_phase_id and i.user_id = v_user_id
+  )
+  update public.track_items i set position = ordered.new_position, updated_at = now()
+    from ordered where i.id = ordered.id and i.user_id = v_user_id;
+  with ordered as (
+    select i.id, (row_number() over (order by i.position, i.id) - 1)::integer as new_position
+      from public.track_items i where i.phase_id = p_phase_id and i.user_id = v_user_id
+  )
+  update public.track_items i set position = ordered.new_position, updated_at = now()
+    from ordered where i.id = ordered.id and i.user_id = v_user_id;
+  return query select true, v_track_id;
+end;
+$$;
+
+grant execute on function public.create_learning_track(text, text, date, date, jsonb) to authenticated;
+grant execute on function public.reschedule_learning_track(uuid, date) to authenticated;
+grant execute on function public.set_track_item_status(uuid, text) to authenticated;
+grant execute on function public.reorder_track_items(uuid, text) to authenticated;
+grant execute on function public.move_track_item_to_phase(uuid, uuid) to authenticated;
+revoke all on function public.create_learning_track(text, text, date, date, jsonb) from public, anon;
+revoke all on function public.reschedule_learning_track(uuid, date) from public, anon;
+revoke all on function public.set_track_item_status(uuid, text) from public, anon;
+revoke all on function public.reorder_track_items(uuid, text) from public, anon;
+revoke all on function public.move_track_item_to_phase(uuid, uuid) from public, anon;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'learning_tracks_id_user_key'
+  ) then
+    alter table public.learning_tracks add constraint learning_tracks_id_user_key unique (id, user_id);
+  end if;
+  if not exists (
+    select 1 from pg_constraint where conname = 'track_phases_id_track_user_key'
+  ) then
+    alter table public.track_phases add constraint track_phases_id_track_user_key unique (id, track_id, user_id);
+  end if;
+  if not exists (
+    select 1 from pg_constraint where conname = 'track_phases_track_owner_fkey'
+  ) then
+    alter table public.track_phases add constraint track_phases_track_owner_fkey
+      foreign key (track_id, user_id)
+      references public.learning_tracks(id, user_id)
+      on delete cascade
+      not valid;
+  end if;
+  if not exists (
+    select 1 from pg_constraint where conname = 'track_items_phase_owner_fkey'
+  ) then
+    alter table public.track_items add constraint track_items_phase_owner_fkey
+      foreign key (phase_id, track_id, user_id)
+      references public.track_phases(id, track_id, user_id)
+      on delete cascade
+      not valid;
+  end if;
+end
+$$;
 
 -- Server-side learning-plan generation quota. Direct client writes are never
 -- granted; authenticated actions use the two RPCs below.

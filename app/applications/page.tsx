@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { PageTransition } from "@/components/shell/page-transition";
 import { ApplicationsView } from "@/components/applications/applications-view";
 import { createClient } from "@/lib/supabase/server";
+import { requireAuthData, requireQueryData } from "@/lib/supabase/query";
 
 export const dynamic = "force-dynamic";
 
@@ -20,15 +21,16 @@ export default async function ApplicationsPage() {
     supabase.from("dropdown_options").select("id, section, field_name, value"),
   ]);
 
-  if (!userRes.data.user) redirect("/login");
+  const auth = requireAuthData(userRes, "applications auth");
+  if (!auth.user) redirect("/login");
 
   return (
     <>
       <PageTransition>
         <ApplicationsView
-          jobs={jobsRes.data ?? []}
-          hackathons={hackathonsRes.data ?? []}
-          dropdownOptions={optionsRes.data ?? []}
+          jobs={requireQueryData(jobsRes, "job applications")}
+          hackathons={requireQueryData(hackathonsRes, "hackathons")}
+          dropdownOptions={requireQueryData(optionsRes, "dropdown options")}
         />
       </PageTransition>
     </>

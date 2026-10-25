@@ -58,6 +58,6 @@ These were component smoke checks, not an authenticated dashboard E2E run:
 - Mobile expansion/collapse, long text with enlarged fonts, resize handling,
   keyboard Enter on arrows, and reduced-motion navigation.
 
-All 26 browser scenarios and all 13 offline regression tests passed. The browser
-checks are supplemental local evidence; `npm test` covers the SSR/callback
-boundaries described above, not browser geometry or screenshot assertions.
+The browser scenarios and the full offline regression suite are supplemental
+local evidence; `npm test` covers the SSR/callback boundaries described above,
+not browser geometry or screenshot assertions.

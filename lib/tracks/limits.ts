@@ -21,4 +21,10 @@ export const LEARNING_PLAN_LIMITS = {
   specs: 120_000,
   /** "Time frame" — e.g. "6 weeks", "3 months", "exam-ready". */
   timeframe: 500,
+  /** Maximum phase count that fits the server action's generation budget. */
+  maxPhases: 12,
+  /** Maximum steps in any single phase. */
+  maxItemsPerPhase: 16,
+  /** Maximum steps in a complete generated/imported plan. */
+  maxItems: 96,
 } as const;

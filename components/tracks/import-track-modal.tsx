@@ -18,15 +18,15 @@ import { inputClass } from "@/components/tracks/fields";
 import { useMotionPreferences } from "@/components/shared/motion-provider";
 import { beginNav } from "@/components/shell/nav-loader";
 import {
-  generateLearningPlan,
   getLearningPlanQuota,
   importTrack,
 } from "@/lib/actions/tracks";
-import type { ParsedTrack } from "@/lib/tracks/contract";
+import type { LearningPlanInput, ParsedTrack } from "@/lib/tracks/contract";
 import { LEARNING_PLAN_LIMITS } from "@/lib/tracks/limits";
 import { haptics } from "@/lib/haptics";
 import { blurIn, blurInTransition } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { useLearningPlanBackground } from "@/components/tracks/learning-plan-background";
 
 const DEFAULT_QUOTA_LIMIT = 5;
 
@@ -87,14 +87,14 @@ function actionMessage(
     case "quota_unavailable":
       return "We couldn’t check your AI plan quota right now. Please try again.";
     case "quota_setup_required":
-      return "Learning-plan setup is incomplete. Please apply the latest database migration and try again.";
+      return "AI planning is temporarily unavailable. Please try again later.";
     case "invalid_input":
     case "validation":
       return "Check your topic and dates, then try again.";
     case "invalid_plan":
       return "The AI planner returned an incomplete plan. Please try again.";
     case "generation_not_configured":
-      return "The AI planner is not available yet. Please try again later.";
+      return "AI planning is temporarily unavailable. Please try again later.";
     case "generation_timeout":
       return "The AI planner took too long to respond. Please try again.";
     case "generation_incomplete":
@@ -136,12 +136,15 @@ function actionMessage(
 
 export function ImportTrackModal({  open,
   onClose,
+  resumeReady = false,
 }: {
   open: boolean;
   onClose: () => void;
+  resumeReady?: boolean;
 }) {
   const router = useRouter();
   const reduceMotion = useMotionPreferences();
+  const { start, claimReady, continueInBackground, clear: clearBackgroundJob } = useLearningPlanBackground();
   const [step, setStep] = React.useState(0);
   const [track, setTrack] = React.useState<ParsedTrack | null>(null);
   const [topic, setTopic] = React.useState("");
@@ -157,6 +160,22 @@ export function ImportTrackModal({  open,
   const [generating, setGenerating] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const generationRequest = React.useRef(0);
+
+  React.useEffect(() => {
+    if (!open || !resumeReady) return;
+    const readyJob = claimReady();
+    if (!readyJob?.track) return;
+
+    setTopic(readyJob.input.topic);
+    setSpecs(readyJob.input.specs);
+    setTimeframe(readyJob.input.timeframe);
+    setStartDate(readyJob.input.startDate);
+    setEndDate(readyJob.input.endDate ?? "");
+    setTrack(readyJob.track);
+    setStep(2);
+    setGenerating(false);
+    setErrorMessage(null);
+  }, [claimReady, open, resumeReady]);
 
   const reset = React.useCallback(() => {
     generationRequest.current += 1;
@@ -177,9 +196,17 @@ export function ImportTrackModal({  open,
   }, []);
 
   const close = React.useCallback(() => {
+    if (generating) {
+      continueInBackground();
+      toast.success("Your plan is continuing in the background", {
+        description: "We’ll let you know here when it’s ready.",
+      });
+    } else {
+      clearBackgroundJob();
+    }
     onClose();
     reset();
-  }, [onClose, reset]);
+  }, [clearBackgroundJob, continueInBackground, generating, onClose, reset]);
 
   const mergeQuota = React.useCallback((result: LearningPlanQuotaResult) => {
     setQuota((current) => {
@@ -352,13 +379,15 @@ export function ImportTrackModal({  open,
     haptics.impact();
 
     try {
-      const result = await generateLearningPlan({
+      const input: LearningPlanInput = {
         topic: topic.trim(),
         specs: specs.trim(),
         timeframe: timeframe.trim(),
         startDate,
         endDate: endDate || null,
-      });
+      };
+      const { promise } = start(input);
+      const result = await promise;
 
       if (generationRequest.current !== requestId) return;
 
@@ -638,7 +667,10 @@ export function ImportTrackModal({  open,
 
           {step === 1 && (
             <motion.div key="generating" {...stepMotion}>
-              <PlanGenerationLoader topic={topic} />
+              <PlanGenerationLoader
+                topic={topic}
+                onContinueInBackground={close}
+              />
             </motion.div>
           )}
 

@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { PageTransition } from "@/components/shell/page-transition";
 import { TrackDetailView } from "@/components/tracks/track-detail-view";
 import { createClient } from "@/lib/supabase/server";
+import { requireAuthData, requireQueryData } from "@/lib/supabase/query";
 
 export const dynamic = "force-dynamic";
 
@@ -33,16 +34,20 @@ export default async function TrackDetailPage({
       .order("position"),
   ]);
 
-  if (!userRes.data.user) redirect("/login");
-  if (!trackRes.data) notFound();
+  const auth = requireAuthData(userRes, "track detail auth");
+  if (!auth.user) redirect("/login");
+  const track = requireQueryData(trackRes, "track detail");
+  const phases = requireQueryData(phasesRes, "track detail phases");
+  const items = requireQueryData(itemsRes, "track detail items");
+  if (!track) notFound();
 
   return (
     <>
       <PageTransition>
         <TrackDetailView
-          track={trackRes.data}
-          phases={phasesRes.data ?? []}
-          items={itemsRes.data ?? []}
+          track={track}
+          phases={phases}
+          items={items}
         />
       </PageTransition>
     </>

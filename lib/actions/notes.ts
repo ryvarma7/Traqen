@@ -25,7 +25,7 @@ export async function saveNote(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
 
   const parsed = noteSchema.safeParse(values);
   if (!parsed.success) return { error: "Please check the note fields." };
@@ -41,11 +41,18 @@ export async function saveNote(
     updated_at: new Date().toISOString(),
   };
 
-  const { error } = id
-    ? await supabase.from("notes").update(payload).eq("id", id).eq("user_id", user.id)
-    : await supabase.from("notes").insert({ ...payload, user_id: user.id });
+  const result = id
+    ? await supabase
+        .from("notes")
+        .update(payload)
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .select("id")
+        .maybeSingle()
+    : await supabase.from("notes").insert({ ...payload, user_id: user.id }).select("id").single();
 
-  if (error) return { error: "Unable to save this note." };
+  if (result.error) return { error: "Unable to save this note." };
+  if (id && !result.data) return { error: "That note no longer exists." };
   revalidatePath("/");
   revalidatePath("/notes");
   return {};
@@ -58,9 +65,16 @@ export async function deleteNote(id: string): Promise<ActionResult> {
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
-  const { error } = await supabase.from("notes").delete().eq("id", id).eq("user_id", user.id);
+  if (!user) return { error: "Your session has expired. Please sign in again." };
+  const { data, error } = await supabase
+    .from("notes")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .select("id")
+    .maybeSingle();
   if (error) return { error: "Unable to delete this note." };
+  if (!data) return { error: "That note no longer exists." };
   revalidatePath("/");
   revalidatePath("/notes");
   return {};

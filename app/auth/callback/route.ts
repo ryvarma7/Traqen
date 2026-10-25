@@ -15,7 +15,10 @@ export async function GET(request: Request) {
   try {
     origin = getSiteUrl(requestUrl.origin);
   } catch {
-    return NextResponse.json({ error: "Authentication is not configured." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Sign-in is temporarily unavailable. Please try again later." },
+      { status: 500 }
+    );
   }
   const code = searchParams.get("code");
 

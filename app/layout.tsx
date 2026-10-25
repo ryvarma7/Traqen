@@ -5,6 +5,7 @@ import ServiceWorkerRegister from "@/components/service-worker";
 import { ProfileProvider } from "@/lib/profile-store";
 import { ProfileRenameModal } from "@/components/shell/profile-rename-modal";
 import { MotionProvider } from "@/components/shared/motion-provider";
+import { LearningPlanBackgroundProvider } from "@/components/tracks/learning-plan-background";
 import "./globals.css";
 
 const raleway = Raleway({
@@ -60,7 +61,7 @@ export default function RootLayout({
          */}
         <MotionProvider>
           <ProfileProvider>
-            {children}
+            <LearningPlanBackgroundProvider>{children}</LearningPlanBackgroundProvider>
             <ProfileRenameModal />
           </ProfileProvider>
           <ServiceWorkerRegister />

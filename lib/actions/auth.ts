@@ -17,7 +17,7 @@ export async function logInWithGoogle(): Promise<AuthResult> {
   try {
     authBaseUrl = getSiteUrl();
   } catch {
-    return { error: "Google sign-in is not configured. Please contact the administrator." };
+    return { error: "Google sign-in is temporarily unavailable. Please try again later." };
   }
 
   const { data, error } = await supabase.auth.signInWithOAuth({
@@ -26,7 +26,7 @@ export async function logInWithGoogle(): Promise<AuthResult> {
       redirectTo: `${authBaseUrl}/auth/callback`,
     },
   });
-  if (error) return { error: "Google sign-in could not be started. Please try again." };
+  if (error) return { error: "We couldn't start Google sign-in. Please try again." };
 
   redirect(data.url);
 }
@@ -36,7 +36,7 @@ export async function logOut(): Promise<AuthResult> {
   // Local scope clears this browser's session without waiting for a global
   // token-revocation request. The cookie is the session boundary for this app.
   const { error } = await supabase.auth.signOut({ scope: "local" });
-  if (error) return { error: "Could not sign out. Please try again." };
+  if (error) return { error: "We couldn't sign you out. Please try again." };
 
   revalidatePath("/", "layout");
   // The caller performs the final navigation after the action response applies

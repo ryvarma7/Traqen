@@ -90,25 +90,36 @@ const itemSchema = z.object({
 const phaseSchema = z.object({
   title: z.string().trim().min(1).max(500),
   description: z.string().max(5000).optional().nullable(),
-  items: z.array(itemSchema).min(1),
+  items: z.array(itemSchema).min(1).max(LEARNING_PLAN_LIMITS.maxItemsPerPhase),
 }).strict();
 
 /**
  * The shape of a course.
  *
- * There is no ceiling on how many phases a course has or how many steps a
- * phase holds: the plan is the learner's, and a course can be four phases of
- * three steps or twelve phases of twenty. What bounds a plan is the window
- * it has to fit into and the work the course actually covers — not a number
- * written down here.
+ * The plan is the learner's, but the server enforces a bounded safe envelope
+ * so provider cost and action duration cannot be exhausted by one response.
+ * The window and the work still decide the shape inside that envelope.
  */
 export const trackSchema = z
   .object({
     track_title: z.string().trim().min(1).max(500),
     description: z.string().max(5000).optional().nullable(),
-    phases: z.array(phaseSchema).min(1),
+    phases: z.array(phaseSchema).min(1).max(LEARNING_PLAN_LIMITS.maxPhases),
   })
-  .strict();
+  .strict()
+  .superRefine((track, ctx) => {
+    const itemCount = track.phases.reduce((count, phase) => count + phase.items.length, 0);
+    if (itemCount > LEARNING_PLAN_LIMITS.maxItems) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.too_big,
+        origin: "array",
+        maximum: LEARNING_PLAN_LIMITS.maxItems,
+        inclusive: true,
+        path: ["phases"],
+        message: `A plan cannot contain more than ${LEARNING_PLAN_LIMITS.maxItems} steps`,
+      });
+    }
+  });
 
 export type ParsedTrack = z.infer<typeof trackSchema>;
 

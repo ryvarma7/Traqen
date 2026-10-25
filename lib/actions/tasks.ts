@@ -28,7 +28,7 @@ export async function saveTask(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (id !== undefined && !idSchema.safeParse(id).success) {
     return { error: "Unable to save this task." };
   }
@@ -56,11 +56,18 @@ export async function saveTask(
     updated_at: new Date().toISOString(),
   };
 
-  const { error } = id
-    ? await supabase.from("tasks").update(payload).eq("id", id).eq("user_id", user.id)
-    : await supabase.from("tasks").insert({ ...payload, user_id: user.id });
+  const result = id
+    ? await supabase
+        .from("tasks")
+        .update(payload)
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .select("id")
+        .maybeSingle()
+    : await supabase.from("tasks").insert({ ...payload, user_id: user.id }).select("id").single();
 
-  if (error) return { error: safeActionError(error, "Unable to save this task.") };
+  if (result.error) return { error: safeActionError(result.error, "Unable to save this task.") };
+  if (id && !result.data) return { error: "That task no longer exists." };
   revalidatePath("/");
   revalidatePath("/tasks");
   return {};
@@ -69,10 +76,17 @@ export async function saveTask(
 export async function deleteTask(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (!idSchema.safeParse(id).success) return { error: "Unable to delete this task." };
-  const { error } = await supabase.from("tasks").delete().eq("id", id).eq("user_id", user.id);
+  const { data, error } = await supabase
+    .from("tasks")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .select("id")
+    .maybeSingle();
   if (error) return { error: safeActionError(error, "Unable to delete this task.") };
+  if (!data) return { error: "That task no longer exists." };
   revalidatePath("/");
   revalidatePath("/tasks");
   return {};
@@ -84,15 +98,18 @@ export async function setTaskStatus(
 ): Promise<ActionResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (!idSchema.safeParse(id).success) return { error: "Unable to update this task." };
   const parsedStatus = z.enum(["To do", "In progress", "Done"]).safeParse(status);
   if (!parsedStatus.success) return { error: "Invalid task status." };
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("tasks")
     .update({ status: parsedStatus.data, updated_at: new Date().toISOString() })
-    .eq("id", id).eq("user_id", user.id);
+    .eq("id", id).eq("user_id", user.id)
+    .select("id")
+    .maybeSingle();
   if (error) return { error: safeActionError(error, "Unable to update this task.") };
+  if (!data) return { error: "That task no longer exists." };
   revalidatePath("/");
   revalidatePath("/tasks");
   return {};
@@ -107,17 +124,20 @@ export async function saveTaskNotes(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (!idSchema.safeParse(id).success) return { error: "Unable to save these notes." };
 
   const parsed = z.string().max(5000).safeParse(notes);
   if (!parsed.success) return { error: "Notes are too long." };
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("tasks")
     .update({ notes: notes.trim() || null, updated_at: new Date().toISOString() })
-    .eq("id", id).eq("user_id", user.id);
+    .eq("id", id).eq("user_id", user.id)
+    .select("id")
+    .maybeSingle();
   if (error) return { error: safeActionError(error, "Unable to save these notes.") };
+  if (!data) return { error: "That task no longer exists." };
   revalidatePath("/");
   revalidatePath("/tasks");
   return {};

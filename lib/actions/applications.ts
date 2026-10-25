@@ -86,7 +86,7 @@ export async function saveJobApplication(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (id !== undefined && !idSchema.safeParse(id).success) {
     return { error: "Unable to save this application." };
   }
@@ -96,11 +96,22 @@ export async function saveJobApplication(
 
   const payload = { ...normalize(parsed.data), updated_at: new Date().toISOString() };
 
-  const { error } = id
-    ? await supabase.from("job_applications").update(payload).eq("id", id).eq("user_id", user.id)
-    : await supabase.from("job_applications").insert({ ...payload, user_id: user.id });
+  const result = id
+    ? await supabase
+        .from("job_applications")
+        .update(payload)
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .select("id")
+        .maybeSingle()
+    : await supabase
+        .from("job_applications")
+        .insert({ ...payload, user_id: user.id })
+        .select("id")
+        .single();
 
-  if (error) return { error: safeActionError(error, "Unable to save this application.") };
+  if (result.error) return { error: safeActionError(result.error, "Unable to save this application.") };
+  if (id && !result.data) return { error: "That application no longer exists." };
   revalidatePath("/");
   revalidatePath("/applications");
   return {};
@@ -109,11 +120,12 @@ export async function saveJobApplication(
 export async function deleteJobApplication(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (!idSchema.safeParse(id).success) return { error: "Unable to delete this application." };
-  const { error } = await supabase.from("job_applications").delete()
-    .eq("id", id).eq("user_id", user.id);
+  const { data, error } = await supabase.from("job_applications").delete()
+    .eq("id", id).eq("user_id", user.id).select("id").maybeSingle();
   if (error) return { error: safeActionError(error, "Unable to delete this application.") };
+  if (!data) return { error: "That application no longer exists." };
   revalidatePath("/");
   revalidatePath("/applications");
   return {};
@@ -127,7 +139,7 @@ export async function saveHackathon(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (id !== undefined && !idSchema.safeParse(id).success) {
     return { error: "Unable to save this hackathon." };
   }
@@ -137,11 +149,22 @@ export async function saveHackathon(
 
   const payload = { ...normalize(parsed.data), updated_at: new Date().toISOString() };
 
-  const { error } = id
-    ? await supabase.from("hackathons").update(payload).eq("id", id).eq("user_id", user.id)
-    : await supabase.from("hackathons").insert({ ...payload, user_id: user.id });
+  const result = id
+    ? await supabase
+        .from("hackathons")
+        .update(payload)
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .select("id")
+        .maybeSingle()
+    : await supabase
+        .from("hackathons")
+        .insert({ ...payload, user_id: user.id })
+        .select("id")
+        .single();
 
-  if (error) return { error: safeActionError(error, "Unable to save this hackathon.") };
+  if (result.error) return { error: safeActionError(result.error, "Unable to save this hackathon.") };
+  if (id && !result.data) return { error: "That hackathon no longer exists." };
   revalidatePath("/");
   revalidatePath("/applications");
   return {};
@@ -150,11 +173,12 @@ export async function saveHackathon(
 export async function deleteHackathon(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (!idSchema.safeParse(id).success) return { error: "Unable to delete this hackathon." };
-  const { error } = await supabase.from("hackathons").delete()
-    .eq("id", id).eq("user_id", user.id);
+  const { data, error } = await supabase.from("hackathons").delete()
+    .eq("id", id).eq("user_id", user.id).select("id").maybeSingle();
   if (error) return { error: safeActionError(error, "Unable to delete this hackathon.") };
+  if (!data) return { error: "That hackathon no longer exists." };
   revalidatePath("/");
   revalidatePath("/applications");
   return {};
@@ -170,17 +194,20 @@ export async function saveJobApplicationNotes(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (!idSchema.safeParse(id).success) return { error: "Unable to save these notes." };
 
   const parsed = z.string().max(5000).safeParse(notes);
   if (!parsed.success) return { error: "Notes are too long." };
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("job_applications")
     .update({ notes: notes.trim() || null, updated_at: new Date().toISOString() })
-    .eq("id", id).eq("user_id", user.id);
+    .eq("id", id).eq("user_id", user.id)
+    .select("id")
+    .maybeSingle();
   if (error) return { error: safeActionError(error, "Unable to save these notes.") };
+  if (!data) return { error: "That application no longer exists." };
   revalidatePath("/");
   revalidatePath("/applications");
   return {};
@@ -194,17 +221,20 @@ export async function saveHackathonNotes(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (!idSchema.safeParse(id).success) return { error: "Unable to save these notes." };
 
   const parsed = z.string().max(5000).safeParse(notes);
   if (!parsed.success) return { error: "Notes are too long." };
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("hackathons")
     .update({ notes: notes.trim() || null, updated_at: new Date().toISOString() })
-    .eq("id", id).eq("user_id", user.id);
+    .eq("id", id).eq("user_id", user.id)
+    .select("id")
+    .maybeSingle();
   if (error) return { error: safeActionError(error, "Unable to save these notes.") };
+  if (!data) return { error: "That hackathon no longer exists." };
   revalidatePath("/");
   revalidatePath("/applications");
   return {};
@@ -220,7 +250,7 @@ export async function addDropdownOption(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
 
   const parsedValue = z.string().trim().min(1).max(200).safeParse(value);
   if (!parsedValue.success) return { error: "Enter a value under 200 characters." };

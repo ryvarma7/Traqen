@@ -3,6 +3,7 @@ import { CalendarView } from "@/components/calendar/calendar-view";
 import { PageTransition } from "@/components/shell/page-transition";
 import { buildCalendarEvents, groupByDate } from "@/lib/calendar";
 import { createClient } from "@/lib/supabase/server";
+import { requireAuthData, requireQueryData } from "@/lib/supabase/query";
 
 export const dynamic = "force-dynamic";
 
@@ -20,14 +21,15 @@ export default async function CalendarPage() {
       supabase.from("track_items").select("id, track_id, title, status, target_date"),
     ]);
 
-  if (!userRes.data.user) redirect("/login");
+  const auth = requireAuthData(userRes, "calendar auth");
+  if (!auth.user) redirect("/login");
 
-  const tracks = tracksRes.data ?? [];
+  const tracks = requireQueryData(tracksRes, "calendar tracks");
   const events = buildCalendarEvents({
-    tasks: tasksRes.data ?? [],
-    jobs: jobsRes.data ?? [],
-    hackathons: hackathonsRes.data ?? [],
-    trackItems: trackItemsRes.data ?? [],
+    tasks: requireQueryData(tasksRes, "calendar tasks"),
+    jobs: requireQueryData(jobsRes, "calendar job applications"),
+    hackathons: requireQueryData(hackathonsRes, "calendar hackathons"),
+    trackItems: requireQueryData(trackItemsRes, "calendar track items"),
     trackTitles: new Map(tracks.map((t) => [t.id, t.title])),
   });
 

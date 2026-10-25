@@ -66,3 +66,27 @@ export function usePendingCreate(handler: () => void) {
     router.replace(query ? `?${query}` : "?", { scroll: false });
   }, [pending, router, searchParams]);
 }
+
+/**
+ * Reopen a completed background learning-plan job after the notification sends
+ * the learner back to the tracks page. The query parameter makes this reliable
+ * across a client navigation, even if the page component remounts.
+ */
+export function usePendingTrackPlanResume(handler: () => void) {
+  const ref = React.useRef(handler);
+  ref.current = handler;
+
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pending = searchParams.get("resume") === "1";
+
+  React.useEffect(() => {
+    if (!pending) return;
+    ref.current();
+
+    const rest = new URLSearchParams(searchParams.toString());
+    rest.delete("resume");
+    const query = rest.toString();
+    router.replace(query ? `?${query}` : "?", { scroll: false });
+  }, [pending, router, searchParams]);
+}

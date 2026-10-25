@@ -2,11 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { addDaysISO, diffDaysISO, isValidDateOnly } from "@/lib/dates";
+import { isValidDateOnly } from "@/lib/dates";
 import { safeActionError } from "@/lib/action-errors";
 import { NvidiaRequestError, generateNvidiaText } from "@/lib/nvidia";
 import { createClient } from "@/lib/supabase/server";
-import { moveWithinOrder } from "@/lib/track-plan";
 import {
   learningPlanInputSchema,
   resolveOffset,
@@ -41,6 +40,8 @@ const DAILY_LEARNING_PLAN_LIMIT = 5;
 const OUTLINE_TIMEOUT_MS = 160_000;
 const COMPACT_OUTLINE_TIMEOUT_MS = 30_000;
 const ENRICH_TIMEOUT_MS = 30_000;
+/** Hard ceiling below the route's 240-second platform limit. */
+const PLAN_GENERATION_BUDGET_MS = 225_000;
 
 /**
  * How many enrichment calls may be in flight at once.
@@ -106,7 +107,7 @@ export async function importTrack(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
 
   if (typeof startDate !== "string" || !isValidDateOnly(startDate)) {
     return { error: "Pick a valid start date." };
@@ -115,7 +116,7 @@ export async function importTrack(
   // Server actions are public endpoints; never trust the client-side parser.
   const parsedTrack = trackSchema.safeParse(track);
   if (!parsedTrack.success) {
-    return { error: "The track contains invalid or unsafe content." };
+    return { error: "We couldn't use that learning plan. Please try again." };
   }
   track = parsedTrack.data;
 
@@ -131,7 +132,7 @@ export async function importTrack(
   for (const phase of track.phases) {
     for (const item of phase.items) {
       if (item.absolute_date && item.offset_days !== null && item.offset_days !== undefined) {
-        return { error: "The track contains conflicting step dates." };
+        return { error: "Some steps have conflicting dates. Please review the plan and try again." };
       }
 
       const targetDate = item.absolute_date
@@ -141,56 +142,15 @@ export async function importTrack(
           : null;
       if (!targetDate) continue;
       if (targetDate < startDate || (endDate && targetDate > endDate)) {
-        return { error: "The track contains a step outside the selected date range." };
+        return { error: "Some steps fall outside the selected date range. Please review the plan and try again." };
       }
     }
   }
 
-  const { data: inserted, error: trackError } = await supabase
-    .from("learning_tracks")
-    .insert({
-      user_id: user.id,
-      title: track.track_title,
-      description: track.description || null,
-      start_date: startDate,
-      end_date: endDate || null,
-      status: "In progress",
-    })
-    .select("id")
-    .single();
-  if (trackError || !inserted) {
-    return { error: safeActionError(trackError, "Could not create the track.") };
-  }
-
-  const trackId = inserted.id;
-
-  for (let p = 0; p < track.phases.length; p++) {
-    const phase = track.phases[p];
-    const { data: phaseRow, error: phaseError } = await supabase
-      .from("track_phases")
-      .insert({
-        track_id: trackId,
-        user_id: user.id,
-        position: p,
-        title: phase.title,
-        description: phase.description || null,
-      })
-      .select("id")
-      .single();
-    if (phaseError || !phaseRow) {
-      await supabase
-        .from("learning_tracks")
-        .delete()
-        .eq("id", trackId)
-        .eq("user_id", user.id);
-      return { error: safeActionError(phaseError, "Could not create a phase.") };
-    }
-
-    const rows = phase.items.map((item, i) => ({
-      track_id: trackId,
-      phase_id: phaseRow.id,
-      user_id: user.id,
-      position: i,
+  const phases = track.phases.map((phase) => ({
+    title: phase.title,
+    description: phase.description || null,
+    items: phase.items.map((item) => ({
       title: item.title,
       description: item.description || null,
       resource_url:
@@ -200,18 +160,28 @@ export async function importTrack(
         : item.offset_days !== null && item.offset_days !== undefined
           ? resolveOffset(startDate, item.offset_days)
           : null,
-      status: "To do",
-    }));
+    })),
+  }));
 
-    const { error: itemsError } = await supabase.from("track_items").insert(rows);
-    if (itemsError) {
-      await supabase
-        .from("learning_tracks")
-        .delete()
-        .eq("id", trackId)
-        .eq("user_id", user.id);
-      return { error: safeActionError(itemsError, "Could not create the track steps.") };
+  const { data: trackId, error: trackError } = await supabase.rpc(
+    "create_learning_track",
+    {
+      p_title: track.track_title,
+      p_description: track.description || null,
+      p_start_date: startDate,
+      p_end_date: endDate || null,
+      p_phases: phases,
     }
+  );
+  if (trackError || typeof trackId !== "string") {
+    return {
+      error: safeActionError(
+        trackError,
+        trackError?.code === "PGRST202"
+          ? "We couldn't create your learning track right now. Please try again later."
+          : "We couldn't create your learning track. Please try again."
+      ),
+    };
   }
 
   revalidatePath("/");
@@ -289,10 +259,13 @@ async function readLearningPlanQuota(
  * retries.
  */
 async function generateOutline(
-  input: LearningPlanInput
+  input: LearningPlanInput,
+  deadline: number
 ): Promise<ParsedTrack | null> {
   for (const compact of [false, true]) {
     try {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new NvidiaRequestError("timeout");
       const { system, user } = buildOutlineMessages(input, { compact });
       // The first attempt lets the model reason before it answers, so it
       // designs the curriculum properly. The compact retry turns the
@@ -303,7 +276,10 @@ async function generateOutline(
         system,
         thinking: compact ? false : undefined,
         effort: compact ? undefined : "medium",
-        timeoutMs: compact ? COMPACT_OUTLINE_TIMEOUT_MS : OUTLINE_TIMEOUT_MS,
+        timeoutMs: Math.min(
+          compact ? COMPACT_OUTLINE_TIMEOUT_MS : OUTLINE_TIMEOUT_MS,
+          remaining
+        ),
       });
       const parsed = parseOutline(raw, input);
       if (parsed.ok) return parsed.outline;
@@ -382,7 +358,8 @@ async function mapWithLimit<T, R>(
  */
 async function enrichOutline(
   outline: ParsedTrack,
-  input: LearningPlanInput
+  input: LearningPlanInput,
+  deadline: number
 ): Promise<ParsedTrack> {
   // One brief per batch of steps. A batch keeps the step's own index inside
   // its phase, so the answers merge back into the right place.
@@ -405,6 +382,8 @@ async function enrichOutline(
         setTimeout(resolve, ENRICH_STAGGER_MS * (index % ENRICH_CONCURRENCY))
       );
     }
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new NvidiaRequestError("timeout");
     const { system, user } = buildEnrichMessages({
       trackTitle: outline.track_title,
       trackDescription: outline.description ?? null,
@@ -416,7 +395,7 @@ async function enrichOutline(
       // The course is already designed. There is nothing left to weigh, so
       // the reasoning trace is pure cost here.
       thinking: false,
-      timeoutMs: ENRICH_TIMEOUT_MS,
+      timeoutMs: Math.min(ENRICH_TIMEOUT_MS, remaining),
     });
     const parsed = parseEnrichment(raw);
     if (!parsed.ok) {
@@ -471,7 +450,7 @@ export async function generateLearningPlan(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return { error: "Not signed in.", code: "UNAUTHENTICATED" };
+    return { error: "Your session has expired. Please sign in again.", code: "UNAUTHENTICATED" };
   }
 
   const parsedInput = learningPlanInputSchema.safeParse(input);
@@ -495,13 +474,13 @@ export async function generateLearningPlan(
   const quota = await consumeLearningPlanQuota(supabase);
   if (quota === "setup_required") {
     return {
-      error: "Learning-plan quota setup is incomplete.",
+      error: "AI planning is temporarily unavailable. Please try again later.",
       code: "QUOTA_SETUP_REQUIRED",
     };
   }
   if (quota === "unavailable") {
     return {
-      error: "Could not check the daily generation limit.",
+      error: "We couldn't check your daily AI plan limit. Please try again.",
       code: "QUOTA_UNAVAILABLE",
     };
   }
@@ -515,17 +494,18 @@ export async function generateLearningPlan(
   }
 
   try {
-    const outline = await generateOutline(parsedInput.data);
+    const deadline = Date.now() + PLAN_GENERATION_BUDGET_MS;
+    const outline = await generateOutline(parsedInput.data, deadline);
     if (!outline) {
       return {
         remaining: quota.remaining,
         resetDate: quota.resetDate,
-        error: "The generated learning plan could not be validated.",
+        error: "We couldn't verify the generated learning plan. Please try again.",
         code: "INVALID_PLAN",
       };
     }
 
-    const merged = await enrichOutline(outline, parsedInput.data);
+    const merged = await enrichOutline(outline, parsedInput.data, deadline);
 
     // The final gate. The merge only ever adds detail to steps the outline
     // already validated, so this should never fail — but the plan is what
@@ -538,7 +518,7 @@ export async function generateLearningPlan(
       return {
         remaining: quota.remaining,
         resetDate: quota.resetDate,
-        error: "The generated learning plan could not be validated.",
+        error: "We couldn't verify the generated learning plan. Please try again.",
         code: "INVALID_PLAN",
       };
     }
@@ -554,7 +534,7 @@ export async function generateLearningPlan(
         return {
           remaining: quota.remaining,
           resetDate: quota.resetDate,
-          error: "Learning-plan generation is not available yet.",
+          error: "AI planning is temporarily unavailable. Please try again later.",
           code: "GENERATION_NOT_CONFIGURED",
         };
       }
@@ -562,7 +542,7 @@ export async function generateLearningPlan(
         return {
           remaining: quota.remaining,
           resetDate: quota.resetDate,
-          error: "Learning-plan generation timed out. Try again.",
+          error: "AI planning took too long to respond. Please try again.",
           code: "GENERATION_TIMEOUT",
         };
       }
@@ -570,7 +550,7 @@ export async function generateLearningPlan(
         return {
           remaining: quota.remaining,
           resetDate: quota.resetDate,
-          error: "The AI planner returned an incomplete response. Try again.",
+          error: "The AI planner couldn't finish the plan. Please try again.",
           code: "GENERATION_INCOMPLETE",
         };
       }
@@ -579,7 +559,7 @@ export async function generateLearningPlan(
     return {
       remaining: quota.remaining,
       resetDate: quota.resetDate,
-      error: "Learning-plan generation is temporarily unavailable.",
+      error: "AI planning is temporarily unavailable. Please try again in a moment.",
       code: "GENERATION_UNAVAILABLE",
     };
   }
@@ -592,19 +572,19 @@ export async function getLearningPlanQuota(): Promise<LearningPlanQuotaResult> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return { error: "Not signed in.", code: "UNAUTHENTICATED" };
+    return { error: "Your session has expired. Please sign in again.", code: "UNAUTHENTICATED" };
   }
 
   const quota = await readLearningPlanQuota(supabase);
   if (quota === "setup_required") {
     return {
-      error: "Learning-plan quota setup is incomplete.",
+      error: "AI planning is temporarily unavailable. Please try again later.",
       code: "QUOTA_SETUP_REQUIRED",
     };
   }
   if (quota === "unavailable") {
     return {
-      error: "Could not load the daily generation limit.",
+      error: "We couldn't load your daily AI plan limit. Please try again.",
       code: "QUOTA_UNAVAILABLE",
     };
   }
@@ -620,41 +600,48 @@ export async function setTrackItemStatus(
 ): Promise<ActionResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (!idSchema.safeParse(id).success) return { error: "Unable to update this step." };
   const parsedStatus = statusSchema.safeParse(status);
   if (!parsedStatus.success) return { error: "Invalid track step status." };
 
-  const { data: item, error } = await supabase
-    .from("track_items")
-    .update({ status: parsedStatus.data, updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .select("id, track_id")
-    .maybeSingle();
-  if (error) return { error: safeActionError(error, "Unable to update this track step.") };
-  if (!item) return { error: "That track step doesn't exist." };
-
-  // Derive track status from its items.
-  if (item) {
-    await syncTrackStatus(supabase, item.track_id, user.id);
-
-    revalidatePath("/");
-    revalidatePath("/tracks");
-    revalidatePath(`/tracks/${item.track_id}`);
+  const { data, error } = await supabase.rpc("set_track_item_status", {
+    p_item_id: id,
+    p_status: parsedStatus.data,
+  });
+  if (error) {
+    return {
+      error: safeActionError(
+        error,
+        error.code === "PGRST202"
+          ? "We couldn't update this step right now. Please try again."
+          : error.code === "P0002"
+            ? "That track step doesn't exist."
+            : "Unable to update this track step."
+      ),
+    };
   }
+  const item = rpcRow(data) as { track_id?: unknown } | null;
+  if (!item || typeof item.track_id !== "string") {
+    return { error: "That track step doesn't exist." };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/tracks");
+  revalidatePath(`/tracks/${item.track_id}`);
   return {};
 }
 
 export async function deleteTrack(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (!idSchema.safeParse(id).success) return { error: "Unable to delete this track." };
   // Phases and items cascade via on delete cascade.
-  const { error } = await supabase.from("learning_tracks").delete()
-    .eq("id", id).eq("user_id", user.id);
+  const { data, error } = await supabase.from("learning_tracks").delete()
+    .eq("id", id).eq("user_id", user.id).select("id").maybeSingle();
   if (error) return { error: safeActionError(error, "Unable to delete this track.") };
+  if (!data) return { error: "That track no longer exists." };
   revalidatePath("/");
   revalidatePath("/tracks");
   return {};
@@ -666,15 +653,18 @@ export async function setTrackStatus(
 ): Promise<ActionResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (!idSchema.safeParse(id).success) return { error: "Unable to update this track." };
   const parsedStatus = z.enum(["In progress", "Completed", "On hold"]).safeParse(status);
   if (!parsedStatus.success) return { error: "Invalid track status." };
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("learning_tracks")
     .update({ status: parsedStatus.data, updated_at: new Date().toISOString() })
-    .eq("id", id).eq("user_id", user.id);
+    .eq("id", id).eq("user_id", user.id)
+    .select("id")
+    .maybeSingle();
   if (error) return { error: safeActionError(error, "Unable to update this track.") };
+  if (!data) return { error: "That track no longer exists." };
   revalidatePath("/");
   revalidatePath("/tracks");
   revalidatePath(`/tracks/${id}`);
@@ -696,7 +686,7 @@ export async function rescheduleTrackItems(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
 
   if (!idSchema.safeParse(trackId).success) {
     return { error: "That track doesn't exist." };
@@ -708,67 +698,32 @@ export async function rescheduleTrackItems(
     return { error: "Pick a valid start date." };
   }
 
-  // Explicit ownership check rather than leaning on the item RLS alone. The
-  // wording is deliberately vague — it must not reveal that someone else's
-  // track exists.
-  const { data: track, error: trackError } = await supabase
-    .from("learning_tracks")
-    .select("id")
-    .eq("id", trackId)
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (trackError) return { error: safeActionError(trackError, "Unable to load that track.") };
-  if (!track) return { error: "That track doesn't exist." };
-
-  // RLS scopes this to the caller's own rows; the status and null-date
-  // filters mean completed and undated steps can never be caught by the shift.
-  const { data: items, error: readError } = await supabase
-    .from("track_items")
-    .select("id, target_date")
-    .eq("track_id", trackId)
-    .eq("user_id", user.id)
-    .neq("status", "Done")
-    .not("target_date", "is", null);
-  if (readError) return { error: safeActionError(readError, "Unable to load the track steps.") };
-
-  const openDates = (items ?? [])
-    .map((i) => i.target_date as string)
-    .sort();
-
-  if (openDates.length === 0) {
-    return { error: "No dated steps left to reschedule." };
+  const { data, error } = await supabase.rpc("reschedule_learning_track", {
+    p_track_id: trackId,
+    p_new_start: newStartISO,
+  });
+  if (error) {
+    return {
+      error: safeActionError(
+        error,
+        error.code === "PGRST202"
+          ? "We couldn't reschedule your track right now. Please try again."
+          : error.code === "P0002"
+            ? "That track doesn't exist."
+            : "Unable to reschedule the track steps."
+      ),
+    };
   }
 
-  // Anchor on the earliest open dated task so the whole remaining plan slides
-  // forward as one block.
-  const delta = diffDaysISO(openDates[0], newStartISO);
-  if (delta === 0) return { moved: 0, delta: 0 };
-
-  const stamp = new Date().toISOString();
-  // The query already excluded Done rows and null dates, so every returned
-  // item is eligible and carries a target_date.
-  const updates = (items ?? []).map((item) =>
-    supabase
-      .from("track_items")
-      .update({
-        target_date: addDaysISO(item.target_date as string, delta),
-        updated_at: stamp,
-      })
-      // Re-assert every scoping column: even if the RLS policy were ever
-      // loosened, this can only ever touch this user's steps in this track.
-      .eq("id", item.id)
-      .eq("track_id", trackId)
-      .eq("user_id", user.id)
-      .select("id")
-  );
-  const results = await Promise.all(updates);
-  const failed = results.find((r) => r.error);
-  if (failed?.error) return { error: safeActionError(failed.error, "Unable to reschedule the track steps.") };
+  const result = rpcRow(data) as { moved?: unknown; delta?: unknown } | null;
+  const moved = typeof result?.moved === "number" ? result.moved : 0;
+  const delta = typeof result?.delta === "number" ? result.delta : 0;
+  if (moved === 0) return { error: "No dated steps left to reschedule." };
 
   revalidatePath("/");
   revalidatePath("/tracks");
   revalidatePath(`/tracks/${trackId}`);
-  return { moved: openDates.length, delta };
+  return { moved, delta };
 }
 
 /* ── Editing the plan ─────────────────────────────────────────────────────
@@ -899,7 +854,7 @@ export async function createTrackItem(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
 
   if (
     !idSchema.safeParse(trackId).success ||
@@ -967,7 +922,7 @@ export async function updateTrackItem(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (!idSchema.safeParse(id).success) {
     return { error: "Unable to update this step." };
   }
@@ -1002,14 +957,17 @@ export async function updateTrackItem(
     update.target_date = parsed.data.target_date ?? null;
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("track_items")
     .update(update)
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .select("id")
+    .maybeSingle();
   if (error) {
     return { error: safeActionError(error, "Unable to update this step.") };
   }
+  if (!data) return { error: "That step doesn't exist." };
 
   await syncTrackStatus(supabase, existing.track_id, user.id);
   revalidatePath("/");
@@ -1024,7 +982,7 @@ export async function deleteTrackItem(id: string): Promise<ActionResult> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (!idSchema.safeParse(id).success) {
     return { error: "Unable to remove this step." };
   }
@@ -1040,14 +998,17 @@ export async function deleteTrackItem(id: string): Promise<ActionResult> {
   }
   if (!existing) return { error: "That step doesn't exist." };
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("track_items")
     .delete()
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .select("id")
+    .maybeSingle();
   if (error) {
     return { error: safeActionError(error, "Unable to remove this step.") };
   }
+  if (!data) return { error: "That step doesn't exist." };
 
   await reindexPhase(supabase, existing.phase_id, user.id);
   await syncTrackStatus(supabase, existing.track_id, user.id);
@@ -1066,7 +1027,7 @@ export async function moveTrackItem(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (!idSchema.safeParse(id).success) {
     return { error: "Unable to move this step." };
   }
@@ -1074,53 +1035,28 @@ export async function moveTrackItem(
     return { error: "Invalid move." };
   }
 
-  const { data: existing, error: readError } = await supabase
-    .from("track_items")
-    .select("id, track_id, phase_id, position")
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (readError) {
-    return { error: safeActionError(readError, "Unable to move this step.") };
+  const { data, error } = await supabase.rpc("reorder_track_items", {
+    p_item_id: id,
+    p_direction: direction,
+  });
+  if (error) {
+    return {
+      error: safeActionError(
+        error,
+        error.code === "PGRST202"
+          ? "We couldn't move this step right now. Please try again."
+          : error.code === "P0002"
+            ? "That step doesn't exist."
+            : "Unable to move this step."
+      ),
+    };
   }
-  if (!existing) return { error: "That step doesn't exist." };
-
-  const { data: siblings } = await supabase
-    .from("track_items")
-    .select("id, position")
-    .eq("phase_id", existing.phase_id)
-    .eq("user_id", user.id)
-    .order("position");
-
-  const ordered = siblings ?? [];
-  const order = moveWithinOrder(
-    ordered.map((row) => row.id),
-    id,
-    direction
-  );
-  // The step is already at the edge it was asked to move past.
-  if (!order) return {};
-
-  // The whole phase is renumbered from the new order, so the stored
-  // positions are always 0, 1, 2, … and always match the display.
-  const stamp = new Date().toISOString();
-  const results = await Promise.all(
-    order.map((stepId, index) =>
-      supabase
-        .from("track_items")
-        .update({ position: index, updated_at: stamp })
-        .eq("id", stepId)
-        .eq("phase_id", existing.phase_id)
-        .eq("user_id", user.id)
-    )
-  );
-  const failed = results.find((r) => r.error);
-  if (failed?.error) {
-    return { error: safeActionError(failed.error, "Unable to move this step.") };
-  }
+  const result = rpcRow(data) as { moved?: unknown; track_id?: unknown } | null;
+  if (!result || typeof result.track_id !== "string") return { error: "That step doesn't exist." };
+  if (result.moved !== true) return {};
 
   revalidatePath("/tracks");
-  revalidatePath(`/tracks/${existing.track_id}`);
+  revalidatePath(`/tracks/${result.track_id}`);
   return {};
 }
 
@@ -1133,54 +1069,33 @@ export async function moveTrackItemToPhase(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (!idSchema.safeParse(id).success || !idSchema.safeParse(phaseId).success) {
     return { error: "Unable to move this step." };
   }
 
-  const { data: existing, error: readError } = await supabase
-    .from("track_items")
-    .select("id, track_id, phase_id")
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (readError) {
-    return { error: safeActionError(readError, "Unable to move this step.") };
-  }
-  if (!existing) return { error: "That step doesn't exist." };
-  if (existing.phase_id === phaseId) return {};
-
-  const { data: target, error: targetError } = await supabase
-    .from("track_phases")
-    .select("id")
-    .eq("id", phaseId)
-    .eq("track_id", existing.track_id)
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (targetError) {
-    return { error: safeActionError(targetError, "Unable to move this step.") };
-  }
-  if (!target) return { error: "That phase doesn't exist." };
-
-  const position = await nextPosition(supabase, phaseId, user.id);
-  const { error } = await supabase
-    .from("track_items")
-    .update({
-      phase_id: phaseId,
-      position,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .eq("user_id", user.id);
+  const { data, error } = await supabase.rpc("move_track_item_to_phase", {
+    p_item_id: id,
+    p_phase_id: phaseId,
+  });
   if (error) {
-    return { error: safeActionError(error, "Unable to move this step.") };
+    return {
+      error: safeActionError(
+        error,
+        error.code === "PGRST202"
+          ? "We couldn't move this step right now. Please try again."
+          : error.code === "P0002"
+            ? "That step or phase doesn't exist."
+            : "Unable to move this step."
+      ),
+    };
   }
+  const result = rpcRow(data) as { moved?: unknown; track_id?: unknown } | null;
+  if (!result || typeof result.track_id !== "string") return { error: "That step or phase doesn't exist." };
+  if (result.moved !== true) return {};
 
-  // Both phases lose a slot or gain one, so both are renumbered.
-  await reindexPhase(supabase, existing.phase_id, user.id);
-  await reindexPhase(supabase, phaseId, user.id);
   revalidatePath("/tracks");
-  revalidatePath(`/tracks/${existing.track_id}`);
+  revalidatePath(`/tracks/${result.track_id}`);
   return {};
 }
 
@@ -1193,7 +1108,7 @@ export async function createTrackPhase(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (!idSchema.safeParse(trackId).success) {
     return { error: "Unable to add this phase." };
   }
@@ -1249,7 +1164,7 @@ export async function updateTrackPhase(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (!idSchema.safeParse(id).success) {
     return { error: "Unable to update this phase." };
   }
@@ -1276,14 +1191,17 @@ export async function updateTrackPhase(
     update.description = parsed.data.description || null;
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("track_phases")
     .update(update)
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .select("id")
+    .maybeSingle();
   if (error) {
     return { error: safeActionError(error, "Unable to update this phase.") };
   }
+  if (!data) return { error: "That phase doesn't exist." };
 
   revalidatePath("/tracks");
   revalidatePath(`/tracks/${existing.track_id}`);
@@ -1296,7 +1214,7 @@ export async function deleteTrackPhase(id: string): Promise<ActionResult> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Not signed in." };
+  if (!user) return { error: "Your session has expired. Please sign in again." };
   if (!idSchema.safeParse(id).success) {
     return { error: "Unable to remove this phase." };
   }
@@ -1313,14 +1231,17 @@ export async function deleteTrackPhase(id: string): Promise<ActionResult> {
   if (!existing) return { error: "That phase doesn't exist." };
 
   // The steps inside the phase cascade with it.
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("track_phases")
     .delete()
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .select("id")
+    .maybeSingle();
   if (error) {
     return { error: safeActionError(error, "Unable to remove this phase.") };
   }
+  if (!data) return { error: "That phase doesn't exist." };
 
   await syncTrackStatus(supabase, existing.track_id, user.id);
   revalidatePath("/");

@@ -9,10 +9,15 @@ import { FabPlus } from "@/components/shared/fab-plus";
 import { useMotionPreferences } from "@/components/shared/motion-provider";
 import { TrackCard, type TrackCardData } from "@/components/tracks/track-card";
 import { deleteTrack } from "@/lib/actions/tracks";
-import { useCreateShortcut, usePendingCreate } from "@/lib/create-bus";
+import {
+  useCreateShortcut,
+  usePendingCreate,
+  usePendingTrackPlanResume,
+} from "@/lib/create-bus";
 import { haptics } from "@/lib/haptics";
 import { listVariants } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { useLearningPlanBackground } from "@/components/tracks/learning-plan-background";
 
 export type TrackSummary = TrackCardData & {
   created_at: string;
@@ -38,13 +43,25 @@ const SORTS: { key: SortKey; label: string }[] = [
 
 export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
   const reduceMotion = useMotionPreferences();
+  const { job: backgroundJob } = useLearningPlanBackground();
   const [importOpen, setImportOpen] = React.useState(false);
+  const [resumeReady, setResumeReady] = React.useState(false);
   const [filter, setFilter] = React.useState<FilterKey>("active");
   const [sort, setSort] = React.useState<SortKey>("next");
 
   // The mobile tab bar's "+" and the hub's quick-action pill both land here.
   useCreateShortcut(() => setImportOpen(true));
   usePendingCreate(() => setImportOpen(true));
+  usePendingTrackPlanResume(() => {
+    if (backgroundJob?.status !== "ready" || !backgroundJob.background) return;
+    setResumeReady(true);
+    setImportOpen(true);
+  });
+
+  const closeImport = () => {
+    setImportOpen(false);
+    setResumeReady(false);
+  };
 
   const remove = async (track: TrackCardData) => {
     if (
@@ -113,7 +130,7 @@ export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
         </div>
 
         <FabPlus label="Create learning plan" onClick={() => setImportOpen(true)} />
-        <ImportTrackModal open={importOpen} onClose={() => setImportOpen(false)} />
+        <ImportTrackModal open={importOpen} onClose={closeImport} resumeReady={resumeReady} />
       </div>
     );
   }
@@ -201,7 +218,7 @@ export function TracksView({ tracks }: { tracks: TrackSummary[] }) {
       {/* Floating create button */}
       <FabPlus label="Create learning plan" onClick={() => setImportOpen(true)} />
 
-      <ImportTrackModal open={importOpen} onClose={() => setImportOpen(false)} />
+      <ImportTrackModal open={importOpen} onClose={closeImport} resumeReady={resumeReady} />
     </div>
   );
 }

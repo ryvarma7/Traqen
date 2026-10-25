@@ -6,7 +6,13 @@ import { useMotionPreferences } from "@/components/shared/motion-provider";
 import { blurIn, blurInTransition } from "@/lib/motion";
 
 /** Calm, monochrome waiting state for the in-app AI plan generation request. */
-export function PlanGenerationLoader({ topic }: { topic?: string }) {
+export function PlanGenerationLoader({
+  topic,
+  onContinueInBackground,
+}: {
+  topic?: string;
+  onContinueInBackground: () => void;
+}) {
   const reduceMotion = useMotionPreferences();
   const topicLabel = topic?.trim();
 
@@ -63,6 +69,19 @@ export function PlanGenerationLoader({ topic }: { topic?: string }) {
           />
         ))}
       </div>
+      <button
+        type="button"
+        onClick={onContinueInBackground}
+        className="glass-btn-base glass-btn-outline mt-7 min-h-11 w-full max-w-xs rounded-field px-4 text-sm"
+      >
+        <span className="flex h-5 w-5 items-center justify-center rounded-full border border-white/25">
+          <span className="h-1.5 w-1.5 rounded-full bg-white/80" />
+        </span>
+        Continue in background
+      </button>
+      <p className="mt-2 max-w-xs text-2xs leading-relaxed text-muted-foreground/60">
+        We&apos;ll let you know here when your plan is ready.
+      </p>
       <span className="sr-only">This can take a couple of minutes.</span>
     </motion.div>
   );

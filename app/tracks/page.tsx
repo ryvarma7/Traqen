@@ -3,6 +3,7 @@ import { PageTransition } from "@/components/shell/page-transition";
 import { TracksView, type TrackSummary } from "@/components/tracks/tracks-view";
 import { createClient } from "@/lib/supabase/server";
 import { nextStepByTrack } from "@/lib/track-plan";
+import { requireAuthData, requireQueryData } from "@/lib/supabase/query";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 240;
@@ -23,13 +24,18 @@ export default async function TracksPage() {
       .select("id, track_id, phase_id, title, status, target_date, position"),
   ]);
 
-  if (!userRes.data.user) redirect("/login");
+  const auth = requireAuthData(userRes, "tracks auth");
+  if (!auth.user) redirect("/login");
+
+  const tracksData = requireQueryData(tracksRes, "learning tracks");
+  const phasesData = requireQueryData(phasesRes, "track phases");
+  const itemsData = requireQueryData(itemsRes, "track items");
 
   // Aggregate per-track progress client-side from the items rows. Items are
   // two-state in the UI (done / not done); rows still carrying the legacy
   // "In progress" value simply count as not done.
   const totals = new Map<string, { total: number; done: number }>();
-  for (const item of itemsRes.data ?? []) {
+  for (const item of itemsData) {
     const agg = totals.get(item.track_id) ?? { total: 0, done: 0 };
     agg.total += 1;
     if (item.status === "Done") agg.done += 1;
@@ -39,12 +45,12 @@ export default async function TracksPage() {
   // The same derivation the track page uses, so a card and the plan it
   // opens can never disagree about what comes next.
   const nextSteps = nextStepByTrack(
-    tracksRes.data ?? [],
-    phasesRes.data ?? [],
-    itemsRes.data ?? []
+    tracksData,
+    phasesData,
+    itemsData
   );
 
-  const tracks: TrackSummary[] = (tracksRes.data ?? []).map((t) => {
+  const tracks: TrackSummary[] = tracksData.map((t) => {
     const next = nextSteps.get(t.id);
     return {
       id: t.id,

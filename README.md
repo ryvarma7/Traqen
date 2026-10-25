@@ -16,7 +16,9 @@ Framer Motion, and Supabase.
    `NEXT_PUBLIC_`, expose them to browser code, or commit `.env.local`.
 4. For a new Supabase project, run `supabase/schema.sql` in its SQL editor.
    Existing Traqen deployments run `supabase/schema-migrations.sql` once after
-   the canonical schema. Do not choose between historical version files.
+   the canonical schema. The migration installs the transactional track RPCs
+   and integrity constraints required by the current server actions. Do not
+   choose between historical version files.
    Enable Google OAuth and allow `<site-url>/auth/callback` in its redirect URLs.
 5. Run `npm run dev`; open **http://localhost:3000**.
 
@@ -63,13 +65,11 @@ with the server-only `NVIDIA_API_KEY` and the model id in `NVIDIA_MODEL`
   outline's answer is small (one short objective per step) and the expensive
   per-step prose is written in small, parallel calls instead of one enormous
   call that would run out of time.
-- **How big a plan gets is the model's decision.** Nothing in the contract
-  caps the number of phases or the number of steps in a phase: a course can be
-  four phases of three steps or twelve phases of twenty. What bounds a plan is
-  the window it has to fit into and the work the topic actually covers.
-  `lib/tracks/outline.ts` no longer scales the counts to the window — it asks
-  the model to plan the shape, and the window tells the model how much there
-  is room for.
+- **How big a plan gets is the model's decision inside a safe envelope.** A
+  course can use up to 12 phases, 16 steps per phase, and 96 steps total. The
+  window and the work the topic actually covers still decide the shape inside
+  those limits. The cap protects provider cost and keeps the two-stage action
+  below its platform timeout.
 - **A phase of any size is still written in full.** The enrichment writes a
   phase's steps in batches of twelve (`ENRICHMENT_BATCH_STEPS`), so a phase
   with more steps than one call can carry is written by several parallel calls
@@ -81,8 +81,10 @@ with the server-only `NVIDIA_API_KEY` and the model id in `NVIDIA_MODEL`
   add a description and a resource; it can never move a step, rename it or
   change its date. A phase whose enrichment fails keeps the outline's
   objective as its step descriptions, so the plan is always complete.
-- The three stages share the 240 seconds the Tracks action is allowed: 160 s
-  for the outline, 30 s for the compact retry, 30 s for the enrichment.
+- The three stages share a hard 225-second application budget inside the
+  240-second Tracks action limit: 160 s for the outline, 30 s for the compact
+  retry, and 30 s for enrichment. Every provider timeout is clamped to the
+  remaining budget.
 - `NVIDIA_BASE_URL` is optional and overrides the API origin, for example
   `http://localhost:8000/v1` for a self-hosted NIM.
 
@@ -111,7 +113,7 @@ npm test
 The suite validates frame-event coalescing, bounded entrance timing, unchanged
 contour geometry/brightness, and the attention queue's responsive contracts.
 Also run `npm run lint`, `npx --no-install tsc --noEmit --incremental false`,
-and `npm run build` before deploying.
+`npm run build`, and `npm audit --omit=dev --audit-level=high` before deploying.
 
 Optional browser regression and measurements, using an installed Chrome/Chromium:
 

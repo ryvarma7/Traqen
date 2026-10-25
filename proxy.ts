@@ -11,7 +11,7 @@ export async function proxy(request: NextRequest) {
 
   if (!url || !supabaseKey || url.includes("your-project-url")) {
     return new NextResponse(
-      "Missing Supabase env vars: set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or _ANON_KEY), then redeploy.",
+      "Traqen is temporarily unavailable. Please try again later.",
       { status: 500, headers: { "content-type": "text/plain" } }
     );
   }

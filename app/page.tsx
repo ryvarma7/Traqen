@@ -17,6 +17,7 @@ import { buildCalendarEvents, groupByDate } from "@/lib/calendar";
 import { daysUntil } from "@/lib/dates";
 import { priorityRank } from "@/lib/priority";
 import { createClient } from "@/lib/supabase/server";
+import { requireAuthData, requireQueryData } from "@/lib/supabase/query";
 import {
   focusTrack,
   nextStepByTrack as nextStepByTrackFor,
@@ -103,10 +104,20 @@ export default async function HubPage({
       .select("id, track_id, phase_id, title, status, target_date, position"),
   ]);
 
-  if (!userRes.data.user) redirect("/login");
+  const auth = requireAuthData(userRes, "hub auth");
+  if (!auth.user) redirect("/login");
 
-  const profileUsername = profileRes.data?.username;
-  const preferences = profileRes.data?.preferences ?? {};
+  const profile = requireQueryData(profileRes, "hub profile");
+  const jobs = requireQueryData(jobsRes, "hub job applications");
+  const hackathons = requireQueryData(hackathonsRes, "hub hackathons");
+  const tasks = requireQueryData(tasksRes, "hub tasks");
+  const notes = requireQueryData(notesRes, "hub notes") as NotePreview[];
+  const tracks = requireQueryData(tracksRes, "hub learning tracks");
+  const trackPhases = requireQueryData(trackPhasesRes, "hub track phases");
+  const trackItems = requireQueryData(trackItemsRes, "hub track items");
+
+  const profileUsername = profile.username;
+  const preferences = profile.preferences ?? {};
   // Ask for a name only when none is present, or the user has never entered
   // one — the username auto-derived from the Google email on first sign-in
   // doesn't count as entered.
@@ -117,13 +128,6 @@ export default async function HubPage({
 
   const greeting = GREETINGS[Math.floor(Math.random() * GREETINGS.length)];
 
-  const jobs = jobsRes.data ?? [];
-  const hackathons = hackathonsRes.data ?? [];
-  const tasks = tasksRes.data ?? [];
-  const notes = (notesRes.data ?? []) as NotePreview[];
-  const tracks = tracksRes.data ?? [];
-  const trackPhases = trackPhasesRes.data ?? [];
-  const trackItems = trackItemsRes.data ?? [];
   const trackTitles = new Map(tracks.map((t) => [t.id, t.title]));
 
   // ── Tracks ───────────────────────────────────────────────────────────────

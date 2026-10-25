@@ -244,10 +244,12 @@ function TrackDetail({
   const changeTrackStatus = async (status: LearningTrack["status"]) => {
     if (statusBusy) return;
     setStatusBusy(true);
+    const previousStatus = localTrack.status;
     setLocalTrack((t) => ({ ...t, status }));
     const result = await setTrackStatus(localTrack.id, status);
     setStatusBusy(false);
     if (result.error) {
+      setLocalTrack((t) => ({ ...t, status: previousStatus }));
       haptics.error();
       toast.error(result.error);
       return;

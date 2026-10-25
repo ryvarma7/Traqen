@@ -12,7 +12,7 @@ export async function GET() {
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, {
+    return NextResponse.json({ error: "Your session has expired. Please sign in again." }, {
       status: 401, headers: { "Cache-Control": "private, no-store" },
     });
   }
@@ -20,7 +20,7 @@ export async function GET() {
   const { data, error } = await readProfile(supabase, user.id);
 
   if (error) {
-    return NextResponse.json({ error: "Failed to load profile" }, {
+    return NextResponse.json({ error: "We couldn't load your profile. Please try again." }, {
       status: 500, headers: { "Cache-Control": "private, no-store" },
     });
   }
